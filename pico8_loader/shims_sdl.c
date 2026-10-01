@@ -93,19 +93,6 @@ static SDL_Joystick *sdl_JoystickOpen(int i)
     return j;
 }
 
-static int sdl_PollEvent(SDL_Event *ev)
-{
-    static int logged;
-    int r = SDL_PollEvent(ev);
-
-    /* Eventos de joystick/controle: 0x600..0x6ff */
-    if (r && ev && ev->type >= 0x600 && ev->type < 0x700 && logged < 40) {
-        lg("evento 0x%x", ev->type);
-        logged++;
-    }
-    return r;
-}
-
 #define D(n)    { #n, (void *)n }
 #define S(n, f) { n, (void *)f }
 
@@ -119,7 +106,7 @@ const shim_t shims_sdl[] = {
     S("SDL_NumJoysticks", sdl_NumJoysticks),
     S("SDL_GameControllerOpen", sdl_GameControllerOpen),
     S("SDL_JoystickOpen", sdl_JoystickOpen),
-    S("SDL_PollEvent", sdl_PollEvent),
+    D(SDL_PollEvent),
     D(SDL_ClearError),
     D(SDL_CreateRGBSurfaceFrom),
     D(SDL_CreateTexture),
