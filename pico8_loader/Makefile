@@ -7,6 +7,7 @@
 #   make install-app  # envia o app para /data/homebrew/PICO8; o ShadowMountPlus
 #                     # registra o icone PICO-8 na home em ate ~15 s
 #   make log          # baixa /data/pico8/loader.log
+#   make release      # zip para instalar sem compilar (../release/)
 #
 # Desenvolvimento (loader como payload, sem o app):
 #   make              # gera pico8_loader.elf
@@ -109,10 +110,38 @@ install-app: app
 	    curl -sS --ftp-create-dirs -T $(APP_DIR)/$$f $(FTP)$(HB_DIR)/$$f || exit 1; \
 	done
 
+# Pacote para quem nao vai compilar: a pasta do app (com icone generico,
+# sem nada da Lexaloffle), o cacert.pem, o LEIA-ME e as licencas.
+VERSION    := $(shell git describe --tags --always --dirty)
+COMMIT     := $(shell git rev-parse --short HEAD)
+SOURCE_URL ?= $(shell git remote get-url origin 2>/dev/null || echo "(ainda sem repositorio publico)")
+REL_NAME   := pico8-ps5-$(VERSION)
+REL        := ../release/$(REL_NAME)
+
+release: ../deps/cacert.pem
+	APP_ICON_LOGO= $(MAKE) app
+	rm -rf $(REL) $(REL).zip
+	mkdir -p $(REL)/data/homebrew/PICO8 $(REL)/data/pico8 $(REL)/licencas
+	cp -r $(APP_DIR)/. $(REL)/data/homebrew/PICO8/
+	cp ../deps/cacert.pem $(REL)/data/pico8/
+	sed -e 's|@VERSION@|$(VERSION)|' -e 's|@COMMIT@|$(COMMIT)|' \
+	    -e 's|@SOURCE@|$(SOURCE_URL)|' $(APP)/release/LEIA-ME.txt > $(REL)/LEIA-ME.txt
+	cp ../deps/boilerplate/LICENSE                  $(REL)/licencas/boilerplate-GPL-3.0.txt
+	cp ../deps/boilerplate/THIRD_PARTY_NOTICES.md   $(REL)/licencas/boilerplate-THIRD_PARTY_NOTICES.md
+	cp ../deps/SDL/LICENSE.txt                      $(REL)/licencas/SDL2-zlib.txt
+	cp ../deps/curl-*/COPYING                       $(REL)/licencas/curl.txt
+	cp ../deps/mbedtls-*/LICENSE                    $(REL)/licencas/mbedtls-Apache-2.0.txt
+	sed -n '2,/opensource.org\/license\/mit-0/p' ../deps/dlmalloc/malloc.c \
+	    > $(REL)/licencas/dlmalloc-MIT-0.txt
+	printf 'cacert.pem: certificados raiz da Mozilla (MPL-2.0), via https://curl.se/ca/cacert.pem\n' \
+	    > $(REL)/licencas/cacert.txt
+	cd ../release && zip -qr $(REL_NAME).zip $(REL_NAME)
+	@echo "pacote: release/$(REL_NAME).zip"
+
 log:
 	@curl -sS ftp://$(PS5_HOST):$(FTP_PORT)/data/pico8/loader.log
 
 clean:
 	rm -f $(ELF)
 
-.PHONY: all upload-data deploy websrv run app install-app log clean
+.PHONY: all upload-data deploy websrv run app install-app release log clean

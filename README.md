@@ -50,6 +50,17 @@ mbedTLS e o boilerplate de apps nativos, e leva alguns minutos. Depois do
 ~15 s. Para atualizar o app, basta rodar `make install-app` de novo, com o
 app fechado no PS5 (o FTP recusa sobrescrever o `eboot.bin` em uso).
 
+## Instalação sem compilar (pacote pronto)
+
+O `make release` gera `release/pico8-ps5-<versão>.zip`. O pacote leva o
+app já compilado, com um ícone genérico (sem nada da Lexaloffle), o
+`cacert.pem`, um `LEIA-ME.txt` e os avisos de licença. Quem recebe o zip
+não precisa de PC Linux nem de SDK, só de FTP:
+
+1. copiar `data/homebrew/PICO8/` do zip para `/data/homebrew/PICO8/`;
+2. copiar `data/pico8/cacert.pem` do zip para `/data/pico8/`;
+3. copiar o `pico8_dyn` e o `pico8.dat` do próprio PICO-8 para `/data/pico8/`.
+
 ## O que vai para o PS5
 
 ```
