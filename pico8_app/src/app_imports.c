@@ -31,6 +31,7 @@ const struct p8_import { const char *name; uint8_t module; } p8_imports[] = {
     { "_read", 1 },
     { "abort", 0 },
     { "accept", 1 },
+    { "access", 1 },
     { "acos", 0 },
     { "acosf", 0 },
     { "asin", 0 },
@@ -351,6 +352,7 @@ __asm__(
     "    .long _read@GOTPCREL\n"
     "    .long abort@GOTPCREL\n"
     "    .long accept@GOTPCREL\n"
+    "    .long access@GOTPCREL\n"
     "    .long acos@GOTPCREL\n"
     "    .long acosf@GOTPCREL\n"
     "    .long asin@GOTPCREL\n"

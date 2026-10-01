@@ -4,10 +4,17 @@
 #include <stdio.h>
 #include <stdint.h>
 
-/* Onde os arquivos do usuario ficam no PS5 (enviados por FTP). */
+/* Dados que o PICO-8 escreve (saves, carts baixados, config) e o log.
+ * Fica fora da pasta do app, para uma atualizacao nao apagar nada. */
 #define P8_DIR       "/data/pico8"
-#define P8_BIN       P8_DIR "/pico8_dyn"
 #define P8_LOG       P8_DIR "/loader.log"
+#define P8_TITLE_ID  "PPSA99808"
+
+/* Onde estao o pico8_dyn e o cacert.pem (paths.c): dentro da pasta do
+ * app ou, no layout antigo, em P8_DIR. */
+extern char p8_bin[256];
+extern char p8_cacert[256];
+int p8_find_files(void);
 
 /* Enderecos fixos do pico8_dyn (nao-PIE), alinhados a paginas de
  * 16 KiB. Faixa validada pelo mmap_probe em 2026-10-01.

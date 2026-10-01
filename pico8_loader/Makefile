@@ -2,7 +2,7 @@
 #
 # Uso:
 #   export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
-#   make upload-data  # envia pico8_dyn, pico8.dat e cacert.pem por FTP (uma vez)
+#   make upload-data  # envia pico8_dyn e pico8.dat para PICO8/pico8/ (uma vez)
 #   make app          # gera o app nativo (eboot.bin) em ../pico8_app/build
 #   make install-app  # envia o app para /data/homebrew/PICO8; o ShadowMountPlus
 #                     # registra o icone PICO-8 na home em ate ~15 s
@@ -41,7 +41,7 @@ CURL_LIBS := $(CURL)/lib/libcurl.a $(CURL)/lib/libmbedtls.a \
              $(CURL)/lib/libeverest.a $(CURL)/lib/libp256m.a
 
 ELF    := pico8_loader.elf
-SRCS   := main.c shims_libc.c shims_sdl.c net_curl.c p8_alloc.c
+SRCS   := main.c shims_libc.c shims_sdl.c net_curl.c p8_alloc.c paths.c
 CFLAGS := -Wall -Werror -O2 -g -I../deps $(SDL2_CFLAGS) -I$(CURL)/include -DCURL_STATICLIB
 
 all: $(ELF)
@@ -59,10 +59,11 @@ $(ELF): $(SRCS) loader.h ../deps/dlmalloc/malloc.c $(SDL2)/lib/libSDL2.a $(CURL)
 ../deps/cacert.pem:
 	curl -fsSLo $@ https://curl.se/ca/cacert.pem
 
-upload-data: ../deps/cacert.pem
-	curl -sS --ftp-create-dirs -T $(PICO8_DIR)/pico8_dyn ftp://$(PS5_HOST):$(FTP_PORT)/data/pico8/
-	curl -sS --ftp-create-dirs -T $(PICO8_DIR)/pico8.dat ftp://$(PS5_HOST):$(FTP_PORT)/data/pico8/
-	curl -sS --ftp-create-dirs -T ../deps/cacert.pem ftp://$(PS5_HOST):$(FTP_PORT)/data/pico8/
+# Os arquivos do PICO-8 do usuario ficam dentro da pasta do app
+# (pico8_loader/paths.c), como os de firmware no ProsperoEden.
+upload-data:
+	curl -sS --ftp-create-dirs -T $(PICO8_DIR)/pico8_dyn ftp://$(PS5_HOST):$(FTP_PORT)$(HB_DIR)/pico8/
+	curl -sS --ftp-create-dirs -T $(PICO8_DIR)/pico8.dat ftp://$(PS5_HOST):$(FTP_PORT)$(HB_DIR)/pico8/
 
 deploy: $(ELF)
 	-@curl -sS -Q "DELE /data/pico8/loader.log" ftp://$(PS5_HOST):$(FTP_PORT)/ >/dev/null 2>&1
@@ -104,14 +105,16 @@ app: $(SDL2)/lib/libSDL2.a $(CURL)/lib/libcurl.a
 APP_FILES := eboot.bin sandbox-elevator.elf sce_module/libc.prx \
              sce_sys/param.json sce_sys/icon0.png
 
-install-app: app
+install-app: app ../deps/cacert.pem
 	-@curl -sS -Q "DELE /data/pico8/loader.log" $(FTP)/ >/dev/null 2>&1
 	for f in $(APP_FILES); do \
 	    curl -sS --ftp-create-dirs -T $(APP_DIR)/$$f $(FTP)$(HB_DIR)/$$f || exit 1; \
 	done
+	curl -sS -T ../deps/cacert.pem $(FTP)$(HB_DIR)/cacert.pem
 
-# Pacote para quem nao vai compilar: a pasta do app (com icone generico,
-# sem nada da Lexaloffle), o cacert.pem, o LEIA-ME e as licencas.
+# Pacote para quem nao vai compilar. A pasta PICO8/ vai inteira para o
+# PS5: o app (icone generico, sem nada da Lexaloffle), o cacert.pem e a
+# subpasta pico8/ onde o usuario poe o pico8_dyn e o pico8.dat.
 VERSION    := $(shell git describe --tags --always --dirty)
 COMMIT     := $(shell git rev-parse --short HEAD)
 SOURCE_URL ?= $(shell git remote get-url origin 2>/dev/null || echo "(ainda sem repositorio publico)")
@@ -121,9 +124,11 @@ REL        := ../release/$(REL_NAME)
 release: ../deps/cacert.pem
 	APP_ICON_LOGO= $(MAKE) app
 	rm -rf $(REL) $(REL).zip
-	mkdir -p $(REL)/data/homebrew/PICO8 $(REL)/data/pico8 $(REL)/licencas
-	cp -r $(APP_DIR)/. $(REL)/data/homebrew/PICO8/
-	cp ../deps/cacert.pem $(REL)/data/pico8/
+	mkdir -p $(REL)/PICO8/pico8 $(REL)/licencas
+	cp -r $(APP_DIR)/. $(REL)/PICO8/
+	rm -rf $(REL)/PICO8/assets
+	cp ../deps/cacert.pem $(REL)/PICO8/
+	cp $(APP)/release/COLOQUE-AQUI.txt $(REL)/PICO8/pico8/
 	sed -e 's|@VERSION@|$(VERSION)|' -e 's|@COMMIT@|$(COMMIT)|' \
 	    -e 's|@SOURCE@|$(SOURCE_URL)|' $(APP)/release/LEIA-ME.txt > $(REL)/LEIA-ME.txt
 	cp ../deps/boilerplate/LICENSE                  $(REL)/licencas/boilerplate-GPL-3.0.txt

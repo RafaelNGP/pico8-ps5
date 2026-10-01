@@ -1,0 +1,1 @@
+../../pico8_loader/paths.c

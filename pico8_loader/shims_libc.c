@@ -350,10 +350,10 @@ static struct linux_dirent *sh_readdir(DIR *d)
 static ssize_t sh_readlink(const char *path, char *buf, size_t len)
 {
     if (strcmp(path, "/proc/self/exe") == 0) {
-        size_t n = strlen(P8_BIN);
+        size_t n = strlen(p8_bin);
         if (n > len)
             n = len;
-        memcpy(buf, P8_BIN, n);
+        memcpy(buf, p8_bin, n);
         return (ssize_t)n;
     }
     return readlink(path, buf, len);

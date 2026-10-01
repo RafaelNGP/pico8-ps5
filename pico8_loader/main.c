@@ -436,7 +436,7 @@ typedef void (*init_fn)(int, char **, char **);
 
 static uint64_t g_main, g_init;
 /* -splore: abre direto no navegador de carts (BBS) em vez do console. */
-static char *g_argv[] = { P8_BIN, "-splore", NULL };
+static char *g_argv[] = { p8_bin, "-splore", NULL };
 
 extern char **environ;
 
@@ -510,9 +510,11 @@ int main(void)
         return 1;
     }
 
-    int fd = open(P8_BIN, O_RDONLY);
+    if (p8_find_files() != 0)
+        return 1;
+    int fd = open(p8_bin, O_RDONLY);
     if (fd < 0) {
-        notify("pico8_loader: nao achei %s (envie por FTP)", P8_BIN);
+        notify("PICO-8: nao consegui abrir %s (errno=%d)", p8_bin, errno);
         return 1;
     }
 
@@ -521,7 +523,7 @@ int main(void)
         memcmp(eh.e_ident, ELFMAG, SELFMAG) != 0 ||
         eh.e_ident[EI_CLASS] != ELFCLASS64 || eh.e_machine != EM_X86_64 ||
         eh.e_type != ET_EXEC) {
-        notify("pico8_loader: %s nao eh um ELF x86-64 ET_EXEC", P8_BIN);
+        notify("PICO-8: %s nao eh o pico8_dyn da versao Linux 64-bit", p8_bin);
         return 1;
     }
 

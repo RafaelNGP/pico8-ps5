@@ -1,0 +1,7 @@
+Coloque nesta pasta os dois arquivos do seu PICO-8 (versao Linux 64-bit,
+do zip baixado em https://www.lexaloffle.com/pico-8.php):
+
+    pico8_dyn
+    pico8.dat
+
+Os outros arquivos do zip nao sao necessarios.

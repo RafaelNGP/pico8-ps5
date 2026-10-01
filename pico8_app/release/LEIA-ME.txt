@@ -7,6 +7,7 @@ DualSense, com audio e com download de carts.
 
 Este pacote NAO contem o PICO-8. Voce precisa da sua copia, a versao
 Linux 64-bit comprada em https://www.lexaloffle.com/pico-8.php
+(testado com a 0.2.7).
 
 
 Requisitos no PS5
@@ -15,49 +16,54 @@ Requisitos no PS5
 - elfldr ouvindo em 127.0.0.1:9021 (costuma vir junto do kstuff ou do
   Payload Manager). O app usa o elfldr para liberar o acesso a /data,
   o mesmo mecanismo do ProsperoEden.
-- Um servidor FTP (ex.: ftpsrv), so para copiar os arquivos.
+- Um jeito de copiar arquivos para o PS5 (ex.: servidor FTP).
 
 
 Instalacao
 ----------
-1. Copie por FTP a pasta  data/homebrew/PICO8/  deste pacote para
-   /data/homebrew/PICO8/  no PS5.
+1. Copie a pasta PICO8 deste pacote, inteira, para /data/homebrew/
+   no PS5.
 
-2. Copie  data/pico8/cacert.pem  deste pacote para  /data/pico8/  no PS5.
-
-3. Do zip Linux do seu PICO-8, copie para  /data/pico8/  no PS5:
+2. Do zip Linux do seu PICO-8, copie estes dois arquivos para dentro de
+   PICO8/pico8/ (a pasta que tem o COLOQUE-AQUI.txt):
        pico8_dyn
        pico8.dat
 
-4. Em ate ~15 s, o ShadowMountPlus registra o icone PICO-8 na Home.
+3. Em ate ~15 s, o ShadowMountPlus registra o icone PICO-8 na Home.
    Abra por ali.
 
-No fim, o PS5 deve ter:
+No fim, a pasta no PS5 fica assim:
 
-   /data/homebrew/PICO8/eboot.bin
-   /data/homebrew/PICO8/sandbox-elevator.elf
-   /data/homebrew/PICO8/sce_module/libc.prx
-   /data/homebrew/PICO8/sce_sys/param.json
-   /data/homebrew/PICO8/sce_sys/icon0.png
-   /data/pico8/pico8_dyn
-   /data/pico8/pico8.dat
-   /data/pico8/cacert.pem
+   /data/homebrew/PICO8/
+       eboot.bin
+       sandbox-elevator.elf
+       cacert.pem
+       sce_module/libc.prx
+       sce_sys/param.json, icon0.png
+       pico8/pico8_dyn          <- seu
+       pico8/pico8.dat          <- seu
 
-Para atualizar, feche o app no PS5 e substitua os arquivos de
-/data/homebrew/PICO8/. Os dados de /data/pico8/ continuam valendo.
+Se faltar algum arquivo, o app avisa com uma notificacao dizendo qual.
+
+
+Atualizacao
+-----------
+Feche o app no PS5 e copie a pasta PICO8 da versao nova por cima da
+antiga. Nao apague a subpasta pico8/: e nela que estao os seus arquivos.
 
 
 Onde ficam seus dados
 ---------------------
-/data/pico8/.lexaloffle/pico-8/  config, favoritos, carts baixados e saves
-/data/pico8/loader.log           log da ultima execucao
+Saves, favoritos, carts baixados e configuracao ficam em
+/data/pico8/.lexaloffle/pico-8/, fora da pasta do app, e continuam la
+apos atualizar ou reinstalar o app.
 
 
 Problemas
 ---------
-Se o app fechar sozinho ou travar, o /data/pico8/loader.log diz onde: o
-crash vem com registradores, pilha e as ultimas chamadas de libc/SDL.
-Leve esse arquivo ao relatar o problema.
+O /data/pico8/loader.log registra cada execucao: quais arquivos foram
+encontrados e, se o app fechar sozinho, onde foi o crash (registradores,
+pilha e as ultimas chamadas). Leve esse arquivo ao relatar o problema.
 
 Limitacoes: teclado USB e teclado na tela nao funcionam. Testado num
 unico PS5; outro firmware pode precisar de ajustes.

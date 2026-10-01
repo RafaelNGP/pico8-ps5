@@ -6,7 +6,7 @@
  * de curl_easy_* eh a mesma do Linux. O TLS nativo do PS5 (sceHttp2)
  * falhou com 0x8095f00c nos downloads HTTPS, por isso nao eh usado.
  *
- * O pacote de CAs fica em /data/pico8/cacert.pem (`make upload-data`).
+ * O pacote de CAs vem da pasta do app (p8_cacert, ver paths.c).
  */
 
 #include <pthread.h>
@@ -28,6 +28,9 @@ static void curl_init_once(void)
 /* Registra cada download; o pico8 so ve o resultado. */
 static CURLcode p8_curl_easy_perform(CURL *c)
 {
+    /* O caminho embutido na libcurl eh o do layout antigo. */
+    if (p8_cacert[0])
+        curl_easy_setopt(c, CURLOPT_CAINFO, p8_cacert);
     CURLcode r = curl_easy_perform(c);
     long status = 0;
     char *url = NULL;

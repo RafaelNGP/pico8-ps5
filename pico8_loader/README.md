@@ -16,6 +16,7 @@ altera o binário.
 | `shims_libc.c` | Os 125 imports de glibc/libm/libdl sobre a libc do PS5. Trata o que difere: `*_chk`, `__xstat`, `__ctype_*_loc`, `struct dirent`, flags do `open`, `clock`/`clock_gettime`, `dlerror`. O stdout/stderr do PICO-8 vai para o log. |
 | `shims_sdl.c` | Os 91 imports `SDL_*` vão direto para o port PS5 do SDL2 (a ABI do SDL2 é estável). Alguns passam por wrappers que registram no log. |
 | `net_curl.c` | Responde ao `dlopen("libcurl.so")` do Splore com uma libcurl real (8.18 + mbedTLS). |
+| `paths.c` | Acha o `pico8_dyn`, o `pico8.dat` e o `cacert.pem` dentro da pasta do app, confere a versão e avisa em português se faltar algo. |
 | `p8_alloc.c` | Heap próprio (dlmalloc em mspace, crescendo por `mmap`) para o PICO-8, o SDL e o curl. |
 
 O mesmo código roda de dois jeitos: como **app nativo**
@@ -76,9 +77,14 @@ make log          # mostra /data/pico8/loader.log
 
 O IP do PS5 é `<PS5_IP>` por padrão; para outro, use `PS5_HOST=<ip>`.
 
-## Onde ficam os dados no PS5
+## Onde ficam os arquivos no PS5
 
-- `/data/pico8/` — `pico8_dyn`, `pico8.dat`, `cacert.pem`, `loader.log`
-- `/data/pico8/.lexaloffle/pico-8/` — config, favoritos, carts baixados e saves (`cdata/`)
-- `/data/homebrew/PICO8/` — o app nativo (`make install-app`)
-- `/data/pico8/pico8_loader.elf` — o loader como payload (`make run`)
+- `/data/homebrew/PICO8/`: o app (`make install-app`), o `cacert.pem` e,
+  em `pico8/`, o `pico8_dyn` e o `pico8.dat` do usuário (`make upload-data`).
+  O `paths.c` procura nesta ordem: `/app0`,
+  `/mnt/sandbox/PPSA99808_000/app0` (o mesmo lugar visto depois da
+  elevação), `/data/homebrew/PICO8` e, por fim, o layout antigo em
+  `/data/pico8`.
+- `/data/pico8/`: o que o PICO-8 escreve (`.lexaloffle/pico-8/`, com
+  config, favoritos, carts e saves) e o `loader.log`.
+- `/data/pico8/pico8_loader.elf`: o loader como payload (`make run`).

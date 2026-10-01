@@ -6,74 +6,46 @@ DualSense, com áudio e com downloads de carts pela internet.
 
 O modelo é "traga sua própria licença": o projeto não contém nem
 redistribui nada da Lexaloffle. Você precisa da sua cópia do PICO-8
-(versão Linux 64-bit, comprada em <https://www.lexaloffle.com/pico-8.php>).
+(versão Linux 64-bit, comprada em <https://www.lexaloffle.com/pico-8.php>;
+testado com a 0.2.7).
 
-## O que você precisa
+## Instalação
 
-**No PS5** (testado num único console):
+Não precisa compilar nem rodar comandos. Basta copiar uma pasta, como no
+ProsperoEden.
+
+**Requisitos no PS5** (testado num único console):
 
 - kstuff e ShadowMountPlus rodando;
 - o elfldr ouvindo em `127.0.0.1:9021`, que costuma vir junto do
   kstuff/Payload Manager. O app usa o elfldr para liberar o acesso a
   `/data` (elevação de sandbox, o mesmo mecanismo do ProsperoEden);
-- um servidor FTP, só para a instalação (o padrão aqui é a porta 2121).
+- um jeito de copiar arquivos para o PS5, como um servidor FTP.
 
-**Arquivos do seu PICO-8** (do zip Linux, em `~/pico-8/` ou em `PICO8_DIR`):
+**Passos**, com o zip `pico8-ps5-<versão>.zip`:
 
-| Arquivo | Para quê |
-|---|---|
-| `pico8_dyn` | o executável que o loader carrega |
-| `pico8.dat` | os dados do PICO-8 |
-| `lexaloffle-pico8.png` | vira o ícone da Home (sem ele, sai um ícone genérico) |
-
-**No PC** (Linux, só para compilar e instalar):
-
-- [ps5-payload-sdk](https://github.com/ps5-payload-dev/sdk) em `/opt/ps5-payload-sdk`;
-- `make`, `ninja`, `cmake`, `clang`/`lld`/`llvm-ar`, `git`, `curl`, `wget`,
-  `unzip`, `python3` com Pillow. No Fedora, o `llvm-config` vem do pacote
-  `llvm-devel`.
-
-## Instalação
-
-```bash
-git clone <este repositório> pico8-ps5 && cd pico8-ps5/pico8_loader
-export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
-export PS5_HOST=192.168.0.50                      # IP do seu PS5
-
-make upload-data   # 1x: pico8_dyn, pico8.dat, cacert.pem -> /data/pico8
-make install-app   # compila e envia o app -> /data/homebrew/PICO8
-```
-
-Na primeira vez, o build baixa e compila o SDL2 do PS5, a libcurl, o
-mbedTLS e o boilerplate de apps nativos, e leva alguns minutos. Depois do
-`install-app`, o ShadowMountPlus registra o ícone **PICO-8** na Home em até
-~15 s. Para atualizar o app, basta rodar `make install-app` de novo, com o
-app fechado no PS5 (o FTP recusa sobrescrever o `eboot.bin` em uso).
-
-## Instalação sem compilar (pacote pronto)
-
-O `make release` gera `release/pico8-ps5-<versão>.zip`. O pacote leva o
-app já compilado, com um ícone genérico (sem nada da Lexaloffle), o
-`cacert.pem`, um `LEIA-ME.txt` e os avisos de licença. Quem recebe o zip
-não precisa de PC Linux nem de SDK, só de FTP:
-
-1. copiar `data/homebrew/PICO8/` do zip para `/data/homebrew/PICO8/`;
-2. copiar `data/pico8/cacert.pem` do zip para `/data/pico8/`;
-3. copiar o `pico8_dyn` e o `pico8.dat` do próprio PICO-8 para `/data/pico8/`.
-
-## O que vai para o PS5
+1. copie a pasta `PICO8` do zip, inteira, para `/data/homebrew/`;
+2. do zip Linux do seu PICO-8, copie o `pico8_dyn` e o `pico8.dat` para
+   dentro de `PICO8/pico8/`;
+3. em até ~15 s, o ShadowMountPlus registra o ícone **PICO-8** na Home.
 
 ```
-/data/homebrew/PICO8/            app nativo (PPSA99808), gerado pelo build
+/data/homebrew/PICO8/            a pasta do app
     eboot.bin                    o loader + SDL2 + libcurl/mbedTLS
     sandbox-elevator.elf         helper da elevação (só aceita o PPSA99808)
+    cacert.pem                   certificados para o HTTPS do Splore
     sce_module/libc.prx          runtime do boilerplate
     sce_sys/param.json, icon0.png
-/data/pico8/                     seus arquivos
-    pico8_dyn, pico8.dat, cacert.pem
-    loader.log                   log da última execução (make log)
+    pico8/pico8_dyn, pico8.dat   seus arquivos do PICO-8
+/data/pico8/                     criada pelo app
     .lexaloffle/pico-8/          config, favoritos, carts baixados e saves
+    loader.log                   log da última execução
 ```
+
+Se faltar algum arquivo, ou se o `pico8_dyn` for de outra versão, o app
+avisa com uma notificação. Para atualizar, feche o app e copie a pasta
+`PICO8` nova por cima da antiga. Os saves ficam em `/data/pico8`, fora da
+pasta do app, e não se perdem.
 
 ## Limitações conhecidas
 
@@ -82,15 +54,47 @@ não precisa de PC Linux nem de SDK, só de FTP:
   com o controle.
 - Testado num único PS5. Outro firmware pode precisar de ajustes.
 
+Se o app fechar sozinho ou travar, o `/data/pico8/loader.log` mostra
+quais arquivos foram usados e, num crash, os registradores, a pilha e as
+últimas 256 chamadas de libc/SDL.
+
+## Compilando
+
+Só para desenvolver. Quem só quer jogar usa o zip.
+
+**No PC** (Linux):
+
+- [ps5-payload-sdk](https://github.com/ps5-payload-dev/sdk) em `/opt/ps5-payload-sdk`;
+- `make`, `ninja`, `cmake`, `clang`/`lld`/`llvm-ar`, `git`, `curl`, `wget`,
+  `unzip`, `zip`, `python3` com Pillow. No Fedora, o `llvm-config` vem do
+  pacote `llvm-devel`;
+- seu PICO-8 Linux em `~/pico-8/` (ou em `PICO8_DIR`). O
+  `lexaloffle-pico8.png` dele vira o ícone do build local.
+
+```bash
+cd pico8_loader
+export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
+export PS5_HOST=192.168.0.50   # IP do seu PS5 (FTP na porta 2121)
+
+make install-app   # compila e envia o app para /data/homebrew/PICO8
+make upload-data   # 1x: envia pico8_dyn e pico8.dat para PICO8/pico8/
+make log           # mostra o /data/pico8/loader.log
+make release       # gera release/pico8-ps5-<versão>.zip
+```
+
+Na primeira vez, o build baixa e compila o SDL2 do PS5, a libcurl, o
+mbedTLS e o boilerplate de apps nativos, e leva alguns minutos. O
+`install-app` precisa do app fechado no PS5, porque o FTP recusa
+sobrescrever o `eboot.bin` em uso.
+
+O zip do `make release` leva a pasta `PICO8` com um ícone genérico (sem
+nada da Lexaloffle), um `LEIA-ME.txt` e os avisos de licença.
+
 ## Estrutura
 
 | Pasta | O que é |
 |---|---|
 | `pico8_loader/` | o loader: carrega o `pico8_dyn` e liga os imports dele à libc e ao SDL2 do PS5. Ver o [README](pico8_loader/README.md). |
-| `pico8_app/` | empacota o loader como app nativo (`eboot.bin`). |
+| `pico8_app/` | empacota o loader como app nativo (`eboot.bin`), mais os textos do pacote em `release/`. |
 | `deps/` | scripts de build do SDL2, da libcurl e do app, além de patches e do dlmalloc. |
 | `mmap_probe/`, `app_probe/` | testes de viabilidade feitos no console (endereços fixos e execução). |
-
-Se o app fechar sozinho ou travar, `make log` mostra o
-`/data/pico8/loader.log`: o crash vem com registradores, pilha e as
-últimas 256 chamadas de libc/SDL.
