@@ -1,3 +1,6 @@
+# Copyright (C) 2026 RafaelNGP
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
 # mmap_probe - Makefile para ps5-payload-sdk
 #
 # Uso:

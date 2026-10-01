@@ -1,4 +1,6 @@
 /* app_probe - o pico8_loader pode rodar dentro de um app nativo?
+ * Copyright (C) 2026 RafaelNGP
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Para o PICO-8 ser um app autonomo (so kstuff + ShadowMountPlus), o
  * loader tem que rodar no proprio processo do eboot.bin. Este probe

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 RafaelNGP
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Gera pico8_app/src/app_imports.c a partir do eboot linkado.
 
 Num app, o rtld do PS5 deixa em NULL (ou num placeholder) o slot do GOT
@@ -34,7 +37,10 @@ def main():
 
     mods = list(dict.fromkeys(provides.get(n, '?') for n in names))
     o = []
-    o.append('/* Gerado por deps/gen_app_imports.py - nao editar. */')
+    o.append('/* Gerado por deps/gen_app_imports.py - nao editar.')
+    o.append(' * Copyright (C) 2026 RafaelNGP')
+    o.append(' * SPDX-License-Identifier: GPL-3.0-or-later')
+    o.append(' */')
     o.append('')
     o.append('#include <stdint.h>')
     o.append('')

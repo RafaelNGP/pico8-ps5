@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (C) 2026 RafaelNGP
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
 # Compila mbedTLS + libcurl estaticos para PS5 em deps/curl. O pico8 faz
 # dlopen("libcurl.so"); o loader responde com estas funcoes. O TLS nativo
 # do PS5 (sceHttp2/sceSsl) falhou com 0x8095f00c nos carts em HTTPS.

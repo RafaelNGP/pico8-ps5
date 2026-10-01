@@ -1,4 +1,6 @@
 /* shims_libc.c - imports glibc/libm/libdl do pico8_dyn sobre a libc do PS5
+ * Copyright (C) 2026 RafaelNGP
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * A maioria das funcoes tem a mesma ABI nos dois lados e vai direto.
  * Aqui ficam so as que divergem: wrappers *_chk do FORTIFY_SOURCE,

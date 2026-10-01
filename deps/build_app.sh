@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (C) 2026 RafaelNGP
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
 # Empacota um app nativo do PS5 (eboot.bin FSELF + sce_sys) a partir de uma
 # pasta nossa, usando o ps5-native-app-boilerplate como ferramenta de build.
 #

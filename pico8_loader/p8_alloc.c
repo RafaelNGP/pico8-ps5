@@ -1,4 +1,6 @@
 /* p8_alloc - heap proprio para pico8, SDL e curl (dlmalloc em mspace)
+ * Copyright (C) 2026 RafaelNGP
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Como app nativo, o heap da libc do PS5 tem capacidade fixa pequena: o
  * primeiro buffer de ~8 MB do pico8 falha e dai em diante ate malloc(12)

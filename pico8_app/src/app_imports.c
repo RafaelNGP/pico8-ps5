@@ -1,4 +1,7 @@
-/* Gerado por deps/gen_app_imports.py - nao editar. */
+/* Gerado por deps/gen_app_imports.py - nao editar.
+ * Copyright (C) 2026 RafaelNGP
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 
 #include <stdint.h>
 

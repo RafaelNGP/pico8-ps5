@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (C) 2026 RafaelNGP
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Gera o icon0.png (512x512) do app na home.
 
 Usa o lexaloffle-pico8.png da instalacao do proprio usuario, ampliado sem
