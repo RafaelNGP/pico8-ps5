@@ -21,11 +21,11 @@ Requisitos no PS5
 
 Instalacao
 ----------
-1. Copie a pasta PICO8 deste pacote, inteira, para /data/homebrew/
+1. Copie a pasta @TITLE_ID@ deste pacote, inteira, para /data/homebrew/
    no PS5.
 
 2. Do zip Linux do seu PICO-8, copie estes dois arquivos para dentro de
-   PICO8/pico8/ (a pasta que tem o COLOQUE-AQUI.txt):
+   @TITLE_ID@/pico8/ (a pasta que tem o COLOQUE-AQUI.txt):
        pico8_dyn
        pico8.dat
 
@@ -34,7 +34,7 @@ Instalacao
 
 No fim, a pasta no PS5 fica assim:
 
-   /data/homebrew/PICO8/
+   /data/homebrew/@TITLE_ID@/
        eboot.bin
        sandbox-elevator.elf
        cacert.pem
@@ -48,7 +48,7 @@ Se faltar algum arquivo, o app avisa com uma notificacao dizendo qual.
 
 Atualizacao
 -----------
-Feche o app no PS5 e copie a pasta PICO8 da versao nova por cima da
+Feche o app no PS5 e copie a pasta @TITLE_ID@ da versao nova por cima da
 antiga. Nao apague a subpasta pico8/: e nela que estao os seus arquivos.
 
 

@@ -55,6 +55,8 @@ python3 "$here/../pico8_app/make_icon.py" "$stage/sce_sys/icon0.png" \
 
 APP_DEFS= APP_INCS= APP_LIBS= SDK_LIBC_OBJS=
 [ ! -f "$app/build.env" ] || . "$app/build.env"
+# O Title ID do param.json chega ao codigo como APP_TITLE_ID.
+APP_DEFS+=" APP_TITLE_ID=$title"
 incs="$link/build/src/elevation"
 for i in $APP_INCS; do incs+=" $link/$i"; done
 libs=

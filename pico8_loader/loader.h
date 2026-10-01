@@ -8,7 +8,14 @@
  * Fica fora da pasta do app, para uma atualizacao nao apagar nada. */
 #define P8_DIR       "/data/pico8"
 #define P8_LOG       P8_DIR "/loader.log"
-#define P8_TITLE_ID  "PPSA99808"
+/* O Title ID vem do pico8_app/sce_sys/param.json: o Makefile e o
+ * deps/build_app.sh passam -DAPP_TITLE_ID=<id>. */
+#ifndef APP_TITLE_ID
+#error "APP_TITLE_ID nao definido (vem do pico8_app/sce_sys/param.json)"
+#endif
+#define P8_STR_(x)   #x
+#define P8_STR(x)    P8_STR_(x)
+#define P8_TITLE_ID  P8_STR(APP_TITLE_ID)
 
 /* Onde estao o pico8_dyn e o cacert.pem (paths.c): dentro da pasta do
  * app ou, no layout antigo, em P8_DIR. */
@@ -16,18 +23,16 @@ extern char p8_bin[256];
 extern char p8_cacert[256];
 int p8_find_files(void);
 
-/* Enderecos fixos do pico8_dyn (nao-PIE), alinhados a paginas de
- * 16 KiB. Faixa validada pelo mmap_probe em 2026-10-01.
- *
- * Tres mapeamentos separados. No PS5, dar PROT_EXEC a parte de um
- * mmap anonimo tira a escrita do mapeamento inteiro (o BSS ficava
- * read-only), entao codigo e dados nao podem dividir o mesmo mmap. */
-#define P8_TEXT_LO   0x0000000000400000ULL
-#define P8_TEXT_HI   0x0000000000598000ULL   /* 0x595550 alinhado */
-#define P8_THUNK_LO  0x0000000000598000ULL   /* thunks dos imports sem shim */
-#define P8_THUNK_HI  0x000000000059c000ULL
-#define P8_DATA_LO   0x0000000000794000ULL   /* 0x795cf0 alinhado p/ baixo */
-#define P8_DATA_HI   0x0000000000b70000ULL   /* 0xb6e380 alinhado p/ cima */
+/* O pico8_dyn nao eh PIE: os segmentos vao nos enderecos do proprio ELF.
+ * O main reserva esta janela antes de qualquer alocacao (o kernel do PS5
+ * entrega primeiro os enderecos baixos) e depois mapeia nela as faixas
+ * lidas dos cabecalhos. A 0.2.7 usa 0x400000-0xb70000. O eboot do app
+ * fica acima da janela (pico8_app/TEXT_BASE). */
+#define P8_WINDOW_LO 0x0000000000400000ULL
+#define P8_WINDOW_HI 0x0000000002400000ULL   /* 32 MiB */
+#define P8_PAGE      0x4000ULL               /* paginas de 16 KiB */
+
+int sceKernelAvailableFlexibleMemorySize(size_t *);
 
 typedef struct {
     const char *name;
@@ -43,6 +48,8 @@ extern FILE *p8_log;
 
 void lg(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 void notify(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+/* Falha interna: detalhes no log, mensagem generica na tela. */
+void p8_fail(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
 /* libcurl emulada (net_curl.c). */
 void *net_curl_dlopen(const char *name);

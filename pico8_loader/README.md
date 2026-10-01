@@ -79,11 +79,11 @@ O IP do PS5 é `<PS5_IP>` por padrão; para outro, use `PS5_HOST=<ip>`.
 
 ## Onde ficam os arquivos no PS5
 
-- `/data/homebrew/PICO8/`: o app (`make install-app`), o `cacert.pem` e,
+- `/data/homebrew/PPSA99808/`: o app (`make install-app`), o `cacert.pem` e,
   em `pico8/`, o `pico8_dyn` e o `pico8.dat` do usuário (`make upload-data`).
   O `paths.c` procura nesta ordem: `/app0`,
   `/mnt/sandbox/PPSA99808_000/app0` (o mesmo lugar visto depois da
-  elevação), `/data/homebrew/PICO8` e, por fim, o layout antigo em
+  elevação), `/data/homebrew/PPSA99808` e, por fim, o layout antigo em
   `/data/pico8`.
 - `/data/pico8/`: o que o PICO-8 escreve (`.lexaloffle/pico-8/`, com
   config, favoritos, carts e saves) e o `loader.log`.

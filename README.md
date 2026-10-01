@@ -24,13 +24,13 @@ ProsperoEden.
 
 **Passos**, com o zip `pico8-ps5-<versão>.zip`:
 
-1. copie a pasta `PICO8` do zip, inteira, para `/data/homebrew/`;
+1. copie a pasta `PPSA99808` do zip, inteira, para `/data/homebrew/`;
 2. do zip Linux do seu PICO-8, copie o `pico8_dyn` e o `pico8.dat` para
-   dentro de `PICO8/pico8/`;
+   dentro de `PPSA99808/pico8/`;
 3. em até ~15 s, o ShadowMountPlus registra o ícone **PICO-8** na Home.
 
 ```
-/data/homebrew/PICO8/            a pasta do app
+/data/homebrew/PPSA99808/        a pasta do app (o nome é o Title ID)
     eboot.bin                    o loader + SDL2 + libcurl/mbedTLS
     sandbox-elevator.elf         helper da elevação (só aceita o PPSA99808)
     cacert.pem                   certificados para o HTTPS do Splore
@@ -44,7 +44,7 @@ ProsperoEden.
 
 Se faltar algum arquivo, ou se o `pico8_dyn` for de outra versão, o app
 avisa com uma notificação. Para atualizar, feche o app e copie a pasta
-`PICO8` nova por cima da antiga. Os saves ficam em `/data/pico8`, fora da
+`PPSA99808` nova por cima da antiga. Os saves ficam em `/data/pico8`, fora da
 pasta do app, e não se perdem.
 
 ## Limitações conhecidas
@@ -76,8 +76,8 @@ cd pico8_loader
 export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
 export PS5_HOST=192.168.0.50   # IP do seu PS5 (FTP na porta 2121)
 
-make install-app   # compila e envia o app para /data/homebrew/PICO8
-make upload-data   # 1x: envia pico8_dyn e pico8.dat para PICO8/pico8/
+make install-app   # compila e envia o app para /data/homebrew/PPSA99808
+make upload-data   # 1x: envia pico8_dyn e pico8.dat para PPSA99808/pico8/
 make log           # mostra o /data/pico8/loader.log
 make release       # gera release/pico8-ps5-<versão>.zip
 ```
@@ -87,7 +87,7 @@ mbedTLS e o boilerplate de apps nativos, e leva alguns minutos. O
 `install-app` precisa do app fechado no PS5, porque o FTP recusa
 sobrescrever o `eboot.bin` em uso.
 
-O zip do `make release` leva a pasta `PICO8` com um ícone genérico (sem
+O zip do `make release` leva a pasta `PPSA99808` com um ícone genérico (sem
 nada da Lexaloffle), um `LEIA-ME.txt` e os avisos de licença.
 
 ## Estrutura

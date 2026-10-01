@@ -33,29 +33,25 @@
 static void sh_exit(int code)
 {
     lg("pico8 chamou exit(%d)", code);
-    notify("pico8_loader: pico8 saiu com exit(%d)", code);
     exit(code);
 }
 
 static void sh_abort(void)
 {
-    lg("pico8 chamou abort()");
-    notify("pico8_loader: pico8 chamou abort()");
+    lg("ERRO: pico8 chamou abort()");   /* o handler de SIGABRT avisa na tela */
     abort();
 }
 
 static void sh_assert_fail(const char *expr, const char *file,
                            unsigned line, const char *func)
 {
-    lg("assert falhou: %s (%s:%u %s)", expr, file, line, func ? func : "?");
-    notify("pico8_loader: assert %s", expr);
+    lg("ERRO: assert falhou: %s (%s:%u %s)", expr, file, line, func ? func : "?");
     abort();
 }
 
 static void sh_stack_chk_fail(void)
 {
-    lg("__stack_chk_fail: canary do pico8 corrompido");
-    notify("pico8_loader: stack smashing detectado");
+    lg("ERRO: __stack_chk_fail: canary do pico8 corrompido");
     abort();
 }
 
@@ -80,7 +76,6 @@ static int *sh_errno_location(void)
 /* Memoria                                                             */
 
 /* O pico8 aloca pelo heap proprio (p8_alloc.c): o do sistema esgota. */
-int sceKernelAvailableFlexibleMemorySize(size_t *);
 int sceKernelAvailableDirectMemorySize(off_t, off_t, size_t, off_t *, size_t *);
 off_t sceKernelGetDirectMemorySize(void);
 

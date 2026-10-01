@@ -2,9 +2,9 @@
 #
 # Uso:
 #   export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
-#   make upload-data  # envia pico8_dyn e pico8.dat para PICO8/pico8/ (uma vez)
+#   make upload-data  # envia pico8_dyn e pico8.dat para <TITLE_ID>/pico8/ (uma vez)
 #   make app          # gera o app nativo (eboot.bin) em ../pico8_app/build
-#   make install-app  # envia o app para /data/homebrew/PICO8; o ShadowMountPlus
+#   make install-app  # envia o app para /data/homebrew/<TITLE_ID>; o ShadowMountPlus
 #                     # registra o icone PICO-8 na home em ate ~15 s
 #   make log          # baixa /data/pico8/loader.log
 #   make release      # zip para instalar sem compilar (../release/)
@@ -18,7 +18,9 @@ PS5_HOST  ?= <PS5_IP>
 FTP_PORT  ?= 2121
 PLDMGR    ?= 8084
 WEBSRV    ?= 8080
-HB_DIR    := /data/homebrew/PICO8
+# O Title ID do app eh o do param.json; a pasta no PS5 leva o mesmo nome.
+TITLE_ID  := $(shell python3 -c 'import json; print(json.load(open("../pico8_app/sce_sys/param.json"))["titleId"])')
+HB_DIR    := /data/homebrew/$(TITLE_ID)
 DEV_ELF   := /data/pico8/pico8_loader.elf
 PICO8_DIR ?= $(HOME)/pico-8
 
@@ -42,7 +44,7 @@ CURL_LIBS := $(CURL)/lib/libcurl.a $(CURL)/lib/libmbedtls.a \
 
 ELF    := pico8_loader.elf
 SRCS   := main.c shims_libc.c shims_sdl.c net_curl.c p8_alloc.c paths.c
-CFLAGS := -Wall -Werror -O2 -g -I../deps $(SDL2_CFLAGS) -I$(CURL)/include -DCURL_STATICLIB
+CFLAGS := -Wall -Werror -O2 -g -DAPP_TITLE_ID=$(TITLE_ID) -I../deps $(SDL2_CFLAGS) -I$(CURL)/include -DCURL_STATICLIB
 
 all: $(ELF)
 
@@ -88,7 +90,7 @@ run: $(ELF)
 
 # App nativo: o loader inteiro como eboot.bin do PPSA99808 (../pico8_app).
 APP     := ../pico8_app
-APP_DIR := $(APP)/build/PPSA99808
+APP_DIR := $(APP)/build/$(TITLE_ID)
 BP      := ../deps/boilerplate
 FTP     := ftp://$(PS5_HOST):$(FTP_PORT)
 
@@ -112,9 +114,9 @@ install-app: app ../deps/cacert.pem
 	done
 	curl -sS -T ../deps/cacert.pem $(FTP)$(HB_DIR)/cacert.pem
 
-# Pacote para quem nao vai compilar. A pasta PICO8/ vai inteira para o
-# PS5: o app (icone generico, sem nada da Lexaloffle), o cacert.pem e a
-# subpasta pico8/ onde o usuario poe o pico8_dyn e o pico8.dat.
+# Pacote para quem nao vai compilar. A pasta <TITLE_ID>/ vai inteira para
+# /data/homebrew/: o app (icone generico, sem nada da Lexaloffle), o
+# cacert.pem e a subpasta pico8/ onde o usuario poe o pico8_dyn e o pico8.dat.
 VERSION    := $(shell git describe --tags --always --dirty)
 COMMIT     := $(shell git rev-parse --short HEAD)
 SOURCE_URL ?= $(shell git remote get-url origin 2>/dev/null || echo "(ainda sem repositorio publico)")
@@ -124,12 +126,12 @@ REL        := ../release/$(REL_NAME)
 release: ../deps/cacert.pem
 	APP_ICON_LOGO= $(MAKE) app
 	rm -rf $(REL) $(REL).zip
-	mkdir -p $(REL)/PICO8/pico8 $(REL)/licencas
-	cp -r $(APP_DIR)/. $(REL)/PICO8/
-	rm -rf $(REL)/PICO8/assets
-	cp ../deps/cacert.pem $(REL)/PICO8/
-	cp $(APP)/release/COLOQUE-AQUI.txt $(REL)/PICO8/pico8/
-	sed -e 's|@VERSION@|$(VERSION)|' -e 's|@COMMIT@|$(COMMIT)|' \
+	mkdir -p $(REL)/$(TITLE_ID)/pico8 $(REL)/licencas
+	cp -r $(APP_DIR)/. $(REL)/$(TITLE_ID)/
+	rm -rf $(REL)/$(TITLE_ID)/assets
+	cp ../deps/cacert.pem $(REL)/$(TITLE_ID)/
+	cp $(APP)/release/COLOQUE-AQUI.txt $(REL)/$(TITLE_ID)/pico8/
+	sed -e 's|@VERSION@|$(VERSION)|' -e 's|@COMMIT@|$(COMMIT)|' -e 's|@TITLE_ID@|$(TITLE_ID)|g' \
 	    -e 's|@SOURCE@|$(SOURCE_URL)|' $(APP)/release/LEIA-ME.txt > $(REL)/LEIA-ME.txt
 	cp ../deps/boilerplate/LICENSE                  $(REL)/licencas/boilerplate-GPL-3.0.txt
 	cp ../deps/boilerplate/THIRD_PARTY_NOTICES.md   $(REL)/licencas/boilerplate-THIRD_PARTY_NOTICES.md

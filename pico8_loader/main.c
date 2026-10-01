@@ -66,8 +66,26 @@ void notify(const char *fmt, ...)
     sceKernelSendNotificationRequest(0, &req, sizeof(req), 0);
 }
 
+/* Falha interna: os detalhes vao para o log; na tela, uma mensagem so. */
+void p8_fail(const char *fmt, ...)
+{
+    char msg[512];
+    va_list ap;
+
+    va_start(ap, fmt);
+    vsnprintf(msg, sizeof(msg), fmt, ap);
+    va_end(ap);
+    lg("ERRO: %s", msg);
+    notify("PICO-8 stopped unexpectedly.\nDetails: " P8_LOG);
+}
+
 /* ------------------------------------------------------------------ */
 /* Crash handler: registra onde o PICO-8 morreu.                       */
+
+/* Faixas do pico8_dyn, lidas dos cabecalhos (plan_layout). */
+static uint64_t text_lo, text_hi, data_lo, data_hi, thunk_lo, thunk_hi;
+static Elf64_Phdr phdrs[16];
+static int n_phdrs;
 
 static uint8_t fault_stack[64 * 1024];
 
@@ -165,9 +183,8 @@ static void on_fault(int sig, siginfo_t *si, void *uc_)
     lg("    loader: on_fault=%p", (void *)on_fault);
     for (int i = 0; (uint64_t)(uintptr_t)sp >= 0x10000 && i < 24; i++)
         lg("    pilha[%2d] = 0x%lx%s", i, (unsigned long)sp[i],
-           sp[i] >= P8_TEXT_LO && sp[i] < P8_TEXT_HI ? " (pico8 text)" : "");
-    notify("pico8_loader: CRASH sinal %d em rip=0x%lx", sig,
-           (unsigned long)mc->mc_rip);
+           sp[i] >= text_lo && sp[i] < text_hi ? " (pico8 text)" : "");
+    notify("PICO-8 stopped unexpectedly.\nDetails: " P8_LOG);
     _exit(128 + sig);
 }
 
@@ -190,8 +207,9 @@ static void install_fault_handler(void)
 /* ------------------------------------------------------------------ */
 /* Imports nao implementados: thunk que registra o nome e devolve 0.   */
 
-#define THUNK_SIZE 32
-#define MAX_THUNKS ((P8_THUNK_HI - P8_THUNK_LO) / THUNK_SIZE)
+#define THUNK_SIZE  32
+#define THUNK_AREA  P8_PAGE
+#define MAX_THUNKS  (THUNK_AREA / THUNK_SIZE)
 
 static const char *thunk_names[MAX_THUNKS];
 static unsigned thunk_calls[MAX_THUNKS];
@@ -212,7 +230,7 @@ static void *make_thunk(const char *name)
         return NULL;
 
     int idx = n_thunks++;
-    uint8_t *t = (uint8_t *)(uintptr_t)(P8_THUNK_LO + (uint64_t)idx * THUNK_SIZE);
+    uint8_t *t = (uint8_t *)(uintptr_t)(thunk_lo + (uint64_t)idx * THUNK_SIZE);
     uint64_t target = (uint64_t)(uintptr_t)unimpl_called;
 
     thunk_names[idx] = name;
@@ -231,7 +249,7 @@ static void *make_trace_thunk(const char *name, void *target)
         return target;
 
     int idx = n_traced++;
-    uint8_t *t = (uint8_t *)(uintptr_t)(P8_THUNK_LO + (uint64_t)n_thunks++ * THUNK_SIZE);
+    uint8_t *t = (uint8_t *)(uintptr_t)(thunk_lo + (uint64_t)n_thunks++ * THUNK_SIZE);
     uint64_t common = (uint64_t)(uintptr_t)p8_trace_common;
 
     trace_names[idx] = name;
@@ -259,55 +277,114 @@ static const shim_t *lookup(const shim_t *tab, const char *name)
     return NULL;
 }
 
-static int load_segments(int fd, Elf64_Ehdr *eh)
-{
-    Elf64_Phdr ph[16];
+#define ALIGN_DOWN(x) ((x) & ~(P8_PAGE - 1))
+#define ALIGN_UP(x)   (((x) + P8_PAGE - 1) & ~(P8_PAGE - 1))
 
+/* Le os cabecalhos e decide as faixas. Segmentos sem escrita (codigo e
+ * dados read-only) formam o TEXT; os gravaveis, o DATA; os thunks vem
+ * logo depois do ultimo. Tem que caber na janela reservada. */
+static int plan_layout(int fd, const Elf64_Ehdr *eh)
+{
     if (eh->e_phnum > 16 ||
-        pread(fd, ph, eh->e_phnum * sizeof(Elf64_Phdr), eh->e_phoff) !=
+        pread(fd, phdrs, eh->e_phnum * sizeof(Elf64_Phdr), eh->e_phoff) !=
             (ssize_t)(eh->e_phnum * sizeof(Elf64_Phdr))) {
         lg("phdrs invalidos");
         return -1;
     }
+    n_phdrs = eh->e_phnum;
 
-    for (int i = 0; i < eh->e_phnum; i++) {
-        if (ph[i].p_type == PT_TLS || ph[i].p_type == PT_INTERP) {
-            if (ph[i].p_type == PT_TLS) {
-                lg("pico8_dyn tem PT_TLS: nao suportado");
-                return -1;
-            }
-            continue;
-        }
-        if (ph[i].p_type != PT_LOAD)
-            continue;
-        uint64_t lo = ph[i].p_vaddr, hi = lo + ph[i].p_memsz;
-        if (!((lo >= P8_TEXT_LO && hi <= P8_TEXT_HI) ||
-              (lo >= P8_DATA_LO && hi <= P8_DATA_HI))) {
-            lg("segmento fora da faixa: 0x%lx+0x%lx",
-               (unsigned long)ph[i].p_vaddr, (unsigned long)ph[i].p_memsz);
+    text_lo = data_lo = UINT64_MAX;
+    text_hi = data_hi = 0;
+    for (int i = 0; i < n_phdrs; i++) {
+        const Elf64_Phdr *p = &phdrs[i];
+        if (p->p_type == PT_TLS) {
+            lg("pico8_dyn tem PT_TLS: nao suportado");
             return -1;
         }
-        void *dst = (void *)(uintptr_t)ph[i].p_vaddr;
-        if (pread(fd, dst, ph[i].p_filesz, ph[i].p_offset) !=
-            (ssize_t)ph[i].p_filesz) {
-            lg("pread do segmento %d falhou errno=%d", i, errno);
+        if (p->p_type != PT_LOAD)
+            continue;
+        uint64_t lo = ALIGN_DOWN(p->p_vaddr), hi = ALIGN_UP(p->p_vaddr + p->p_memsz);
+        uint64_t *flo = (p->p_flags & PF_W) ? &data_lo : &text_lo;
+        uint64_t *fhi = (p->p_flags & PF_W) ? &data_hi : &text_hi;
+        if (lo < *flo)
+            *flo = lo;
+        if (hi > *fhi)
+            *fhi = hi;
+    }
+    if (!text_hi || !data_hi) {
+        lg("pico8_dyn sem segmento de codigo ou de dados");
+        return -1;
+    }
+    /* No PS5 o PROT_EXEC tira a escrita do mmap inteiro: TEXT e DATA
+     * precisam de mapeamentos (e paginas) separados. */
+    if (text_lo < data_hi && data_lo < text_hi) {
+        lg("TEXT 0x%lx-0x%lx e DATA 0x%lx-0x%lx se sobrepoem",
+           (unsigned long)text_lo, (unsigned long)text_hi,
+           (unsigned long)data_lo, (unsigned long)data_hi);
+        return -1;
+    }
+    thunk_lo = text_hi > data_hi ? text_hi : data_hi;
+    thunk_hi = thunk_lo + THUNK_AREA;
+    uint64_t lowest = text_lo < data_lo ? text_lo : data_lo;
+    if (lowest < P8_WINDOW_LO || thunk_hi > P8_WINDOW_HI) {
+        lg("pico8_dyn 0x%lx-0x%lx nao cabe na janela 0x%lx-0x%lx",
+           (unsigned long)lowest, (unsigned long)thunk_hi,
+           (unsigned long)P8_WINDOW_LO, (unsigned long)P8_WINDOW_HI);
+        return -1;
+    }
+    lg("layout: TEXT 0x%lx-0x%lx DATA 0x%lx-0x%lx thunks 0x%lx-0x%lx",
+       (unsigned long)text_lo, (unsigned long)text_hi,
+       (unsigned long)data_lo, (unsigned long)data_hi,
+       (unsigned long)thunk_lo, (unsigned long)thunk_hi);
+    return 0;
+}
+
+/* Mapeia as tres faixas RW por cima da reserva PROT_NONE, cada uma no
+ * seu proprio mmap. */
+static int map_layout(void)
+{
+    const uint64_t r[3][2] = {
+        { text_lo, text_hi }, { data_lo, data_hi }, { thunk_lo, thunk_hi },
+    };
+
+    for (int i = 0; i < 3; i++) {
+        void *want = (void *)(uintptr_t)r[i][0];
+        void *got = mmap(want, r[i][1] - r[i][0], PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANON | MAP_FIXED, -1, 0);
+        if (got != want) {
+            lg("mmap 0x%lx-0x%lx falhou errno=%d", (unsigned long)r[i][0],
+               (unsigned long)r[i][1], errno);
             return -1;
         }
-        lg("LOAD 0x%lx filesz=0x%lx memsz=0x%lx flags=%x",
-           (unsigned long)ph[i].p_vaddr, (unsigned long)ph[i].p_filesz,
-           (unsigned long)ph[i].p_memsz, ph[i].p_flags);
     }
     return 0;
 }
 
-static int relocate(Elf64_Ehdr *eh)
+static int load_segments(int fd)
 {
-    Elf64_Phdr *ph = (Elf64_Phdr *)(uintptr_t)(P8_TEXT_LO + eh->e_phoff);
+    for (int i = 0; i < n_phdrs; i++) {
+        const Elf64_Phdr *p = &phdrs[i];
+        if (p->p_type != PT_LOAD)
+            continue;
+        void *dst = (void *)(uintptr_t)p->p_vaddr;
+        if (pread(fd, dst, p->p_filesz, p->p_offset) != (ssize_t)p->p_filesz) {
+            lg("pread do segmento %d falhou errno=%d", i, errno);
+            return -1;
+        }
+        lg("LOAD 0x%lx filesz=0x%lx memsz=0x%lx flags=%x",
+           (unsigned long)p->p_vaddr, (unsigned long)p->p_filesz,
+           (unsigned long)p->p_memsz, p->p_flags);
+    }
+    return 0;
+}
+
+static int relocate(void)
+{
     Elf64_Dyn *dyn = NULL;
 
-    for (int i = 0; i < eh->e_phnum; i++)
-        if (ph[i].p_type == PT_DYNAMIC)
-            dyn = (Elf64_Dyn *)(uintptr_t)ph[i].p_vaddr;
+    for (int i = 0; i < n_phdrs; i++)
+        if (phdrs[i].p_type == PT_DYNAMIC)
+            dyn = (Elf64_Dyn *)(uintptr_t)phdrs[i].p_vaddr;
     if (!dyn) {
         lg("sem PT_DYNAMIC");
         return -1;
@@ -458,31 +535,21 @@ static void *pico8_thread(void *arg)
     int r = ((main_fn)(uintptr_t)g_main)(2, g_argv, environ);
 
     lg("main do pico8 retornou %d", r);
-    notify("pico8_loader: main retornou %d", r);
     return NULL;
 }
 
 int main(void)
 {
-    /* Reserva as faixas antes de qualquer malloc grande, para nada do
-     * proprio loader cair dentro delas. */
-    static const struct { uint64_t lo, hi; } regions[] = {
-        { P8_TEXT_LO,  P8_TEXT_HI },
-        { P8_THUNK_LO, P8_THUNK_HI },
-        { P8_DATA_LO,  P8_DATA_HI },
-    };
-    int map_errno = 0;
-    uint64_t map_fail = 0;
-    for (size_t i = 0; i < sizeof(regions) / sizeof(regions[0]); i++) {
-        void *want = (void *)(uintptr_t)regions[i].lo;
-        void *got = mmap(want, regions[i].hi - regions[i].lo,
-                         PROT_READ | PROT_WRITE,
-                         MAP_PRIVATE | MAP_ANON | MAP_FIXED | MAP_EXCL, -1, 0);
-        if (got != want && !map_fail) {
-            map_errno = errno;
-            map_fail = regions[i].lo;
-        }
-    }
+    /* Reserva a janela antes de qualquer alocacao: o kernel do PS5
+     * entrega primeiro os enderecos baixos, e um malloc ou um mmap do
+     * proprio loader cairia onde o pico8_dyn precisa ficar. PROT_NONE so
+     * reserva enderecos; as faixas reais vem depois, em map_layout. */
+    size_t flex_before = 0, flex_after = 0;
+    sceKernelAvailableFlexibleMemorySize(&flex_before);
+    void *window = mmap((void *)(uintptr_t)P8_WINDOW_LO, P8_WINDOW_HI - P8_WINDOW_LO,
+                        PROT_NONE, MAP_PRIVATE | MAP_ANON | MAP_FIXED | MAP_EXCL, -1, 0);
+    int map_errno = window == MAP_FAILED ? errno : 0;
+    sceKernelAvailableFlexibleMemorySize(&flex_after);
 
 #ifdef P8_APP
     /* Como eboot.bin, o sandbox esconde /data ate a elevacao. Vem depois
@@ -502,11 +569,12 @@ int main(void)
     lg("app nativo, elevacao status=%d (0=ok)", elev);
     p8_app_check_imports();
 #endif
-    notify("pico8_loader iniciado");
 
-    if (map_fail) {
-        notify("pico8_loader: faixa 0x%lx indisponivel (errno=%d)",
-               (unsigned long)map_fail, map_errno);
+    lg("janela 0x%lx-0x%lx: %p (errno=%d), flexivel livre %zu -> %zu",
+       (unsigned long)P8_WINDOW_LO, (unsigned long)P8_WINDOW_HI, window,
+       map_errno, flex_before, flex_after);
+    if (window != (void *)(uintptr_t)P8_WINDOW_LO) {
+        p8_fail("janela de enderecos do pico8 indisponivel (errno=%d)", map_errno);
         return 1;
     }
 
@@ -514,7 +582,7 @@ int main(void)
         return 1;
     int fd = open(p8_bin, O_RDONLY);
     if (fd < 0) {
-        notify("PICO-8: nao consegui abrir %s (errno=%d)", p8_bin, errno);
+        p8_fail("nao consegui abrir %s (errno=%d)", p8_bin, errno);
         return 1;
     }
 
@@ -523,38 +591,43 @@ int main(void)
         memcmp(eh.e_ident, ELFMAG, SELFMAG) != 0 ||
         eh.e_ident[EI_CLASS] != ELFCLASS64 || eh.e_machine != EM_X86_64 ||
         eh.e_type != ET_EXEC) {
-        notify("PICO-8: %s nao eh o pico8_dyn da versao Linux 64-bit", p8_bin);
+        notify("PICO-8: pico8_dyn is not the Linux 64-bit version.\n"
+               "Copy pico8_dyn from the PICO-8 Linux zip (amd64).");
         return 1;
     }
 
-    if (load_segments(fd, &eh) != 0) {
-        notify("pico8_loader: falha ao carregar segmentos (ver log)");
+    if (plan_layout(fd, &eh) != 0 || map_layout() != 0) {
+        p8_fail("layout do pico8_dyn nao suportado");
+        return 1;
+    }
+    if (load_segments(fd) != 0) {
+        p8_fail("falha ao carregar segmentos");
         return 1;
     }
     close(fd);
 
     shims_libc_init();
     shims_sdl_init();
-    if (relocate(&eh) != 0) {
-        notify("pico8_loader: falha nas relocacoes (ver log)");
+    if (relocate() != 0) {
+        p8_fail("falha nas relocacoes");
         return 1;
     }
 
     if (parse_start(eh.e_entry, &g_main, &g_init) != 0) {
-        notify("pico8_loader: _start com formato inesperado");
+        p8_fail("_start com formato inesperado");
         return 1;
     }
 
-    if (mprotect((void *)(uintptr_t)P8_TEXT_LO, P8_TEXT_HI - P8_TEXT_LO,
+    if (mprotect((void *)(uintptr_t)text_lo, text_hi - text_lo,
                  PROT_READ | PROT_EXEC) != 0 ||
-        mprotect((void *)(uintptr_t)P8_THUNK_LO, P8_THUNK_HI - P8_THUNK_LO,
+        mprotect((void *)(uintptr_t)thunk_lo, thunk_hi - thunk_lo,
                  PROT_READ | PROT_EXEC) != 0) {
-        notify("pico8_loader: mprotect R+X falhou errno=%d", errno);
+        p8_fail("mprotect R+X falhou errno=%d", errno);
         return 1;
     }
-    if (check_writable(P8_DATA_LO) != 0 ||
-        check_writable(P8_DATA_HI - 1) != 0) {
-        notify("pico8_loader: DATA perdeu escrita apos mprotect");
+    if (check_writable(data_lo) != 0 ||
+        check_writable(data_hi - 1) != 0) {
+        p8_fail("DATA perdeu escrita apos mprotect");
         return 1;
     }
     lg("TEXT/thunks R+X, DATA RW verificado");
@@ -567,7 +640,7 @@ int main(void)
     pthread_attr_init(&attr);
     pthread_attr_setstacksize(&attr, PICO8_STACK_SIZE);
     if (pthread_create(&th, &attr, pico8_thread, NULL) != 0) {
-        notify("pico8_loader: pthread_create falhou");
+        p8_fail("pthread_create falhou");
         return 1;
     }
     pthread_join(th, NULL);

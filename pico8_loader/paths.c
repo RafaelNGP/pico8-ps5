@@ -1,14 +1,14 @@
 /* paths - onde ficam os arquivos do PICO-8 e o cacert.pem
  *
  * Como app nativo, tudo que o usuario instala fica dentro da pasta do app,
- * como no ProsperoEden: o pacote traz PICO8/cacert.pem e o usuario poe o
- * pico8_dyn e o pico8.dat em PICO8/pico8/. O pico8 acha o pico8.dat ao lado
+ * como no ProsperoEden: o pacote traz <titleId>/cacert.pem e o usuario poe
+ * o pico8_dyn e o pico8.dat em <titleId>/pico8/. O pico8 acha o pico8.dat ao lado
  * do executavel (codo_prefix_with_program_path sobre /proc/self/exe), entao
  * basta apontar p8_bin para a pasta certa.
  *
  * A pasta do app eh /app0 no sandbox, mas depois da elevacao o processo
  * enxerga a raiz real, onde ela aparece em /mnt/sandbox/<titleId>_000/app0.
- * O /data/homebrew/PICO8 cobre o local padrao do ShadowMountPlus, e o
+ * O /data/homebrew/<titleId> cobre o local padrao do ShadowMountPlus, e o
  * /data/pico8 eh o layout antigo (e o unico no modo payload). Saves, log e
  * HOME ficam sempre em P8_DIR, fora da pasta do app, para uma atualizacao
  * nao apagar nada.
@@ -28,7 +28,7 @@ static const char *const app_roots[] = {
     "/app0",
     "/mnt/sandbox/" P8_TITLE_ID "_000/app0",
 #endif
-    "/data/homebrew/PICO8",   /* tambem no modo payload (make run) */
+    "/data/homebrew/" P8_TITLE_ID,   /* tambem no modo payload (make run) */
     NULL,
 };
 
@@ -63,9 +63,9 @@ static void check_version(void)
 
     lg("versao do pico8_dyn: %s", ver[0] ? ver : "?");
     if (strcmp(ver, P8_TESTED_VERSION) != 0)
-        notify("PICO-8: este pico8_dyn e a versao %s; o testado e a %s.\n"
-               "Se o PICO-8 nao abrir, use a versao " P8_TESTED_VERSION ".",
-               ver[0] ? ver : "desconhecida", P8_TESTED_VERSION);
+        notify("PICO-8: this pico8_dyn is version %s; tested with %s.\n"
+               "If PICO-8 does not start, use version " P8_TESTED_VERSION ".",
+               ver[0] ? ver : "unknown", P8_TESTED_VERSION);
 }
 
 static int exists(const char *path)
@@ -94,9 +94,10 @@ int p8_find_files(void)
     char dat[256];
 
     if (find(p8_bin, sizeof(p8_bin), "pico8/pico8_dyn", "pico8_dyn") != 0) {
-        notify("PICO-8: arquivos do PICO-8 nao encontrados.\n"
-               "Copie pico8_dyn e pico8.dat (do zip Linux do PICO-8) "
-               "para a pasta pico8 dentro da pasta do app (PICO8/pico8/).");
+        notify("PICO-8: game files not found.\n"
+               "Copy pico8_dyn and pico8.dat from your PICO-8 Linux zip "
+               "into the pico8 folder inside the app folder "
+               "(" P8_TITLE_ID "/pico8/).");
         return -1;
     }
     lg("pico8_dyn: %s", p8_bin);
@@ -105,8 +106,9 @@ int p8_find_files(void)
     snprintf(dat, sizeof(dat), "%.*s/pico8.dat",
              (int)(strrchr(p8_bin, '/') - p8_bin), p8_bin);
     if (!exists(dat)) {
-        notify("PICO-8: falta o pico8.dat.\n"
-               "Copie o pico8.dat para a mesma pasta do pico8_dyn:\n%s", dat);
+        notify("PICO-8: pico8.dat not found.\n"
+               "Copy pico8.dat next to pico8_dyn (" P8_TITLE_ID "/pico8/).");
+        lg("  nao achei %s", dat);
         return -1;
     }
 
