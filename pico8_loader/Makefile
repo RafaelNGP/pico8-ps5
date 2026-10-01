@@ -119,29 +119,29 @@ install-app: app ../deps/cacert.pem
 # cacert.pem e a subpasta pico8/ onde o usuario poe o pico8_dyn e o pico8.dat.
 VERSION    := $(shell git describe --tags --always --dirty)
 COMMIT     := $(shell git rev-parse --short HEAD)
-SOURCE_URL ?= $(shell git remote get-url origin 2>/dev/null || echo "(ainda sem repositorio publico)")
+SOURCE_URL ?= $(shell git remote get-url origin 2>/dev/null || echo "(no public repository yet)")
 REL_NAME   := pico8-ps5-$(VERSION)
 REL        := ../release/$(REL_NAME)
 
 release: ../deps/cacert.pem
 	APP_ICON_LOGO= $(MAKE) app
 	rm -rf $(REL) $(REL).zip
-	mkdir -p $(REL)/$(TITLE_ID)/pico8 $(REL)/licencas
+	mkdir -p $(REL)/$(TITLE_ID)/pico8 $(REL)/licenses
 	cp -r $(APP_DIR)/. $(REL)/$(TITLE_ID)/
 	rm -rf $(REL)/$(TITLE_ID)/assets
 	cp ../deps/cacert.pem $(REL)/$(TITLE_ID)/
-	cp $(APP)/release/COLOQUE-AQUI.txt $(REL)/$(TITLE_ID)/pico8/
+	cp $(APP)/release/PUT-YOUR-FILES-HERE.txt $(REL)/$(TITLE_ID)/pico8/
 	sed -e 's|@VERSION@|$(VERSION)|' -e 's|@COMMIT@|$(COMMIT)|' -e 's|@TITLE_ID@|$(TITLE_ID)|g' \
-	    -e 's|@SOURCE@|$(SOURCE_URL)|' $(APP)/release/LEIA-ME.txt > $(REL)/LEIA-ME.txt
-	cp ../deps/boilerplate/LICENSE                  $(REL)/licencas/boilerplate-GPL-3.0.txt
-	cp ../deps/boilerplate/THIRD_PARTY_NOTICES.md   $(REL)/licencas/boilerplate-THIRD_PARTY_NOTICES.md
-	cp ../deps/SDL/LICENSE.txt                      $(REL)/licencas/SDL2-zlib.txt
-	cp ../deps/curl-*/COPYING                       $(REL)/licencas/curl.txt
-	cp ../deps/mbedtls-*/LICENSE                    $(REL)/licencas/mbedtls-Apache-2.0.txt
+	    -e 's|@SOURCE@|$(SOURCE_URL)|' $(APP)/release/README.txt > $(REL)/README.txt
+	cp ../deps/boilerplate/LICENSE                  $(REL)/licenses/boilerplate-GPL-3.0.txt
+	cp ../deps/boilerplate/THIRD_PARTY_NOTICES.md   $(REL)/licenses/boilerplate-THIRD_PARTY_NOTICES.md
+	cp ../deps/SDL/LICENSE.txt                      $(REL)/licenses/SDL2-zlib.txt
+	cp ../deps/curl-*/COPYING                       $(REL)/licenses/curl.txt
+	cp ../deps/mbedtls-*/LICENSE                    $(REL)/licenses/mbedtls-Apache-2.0.txt
 	sed -n '2,/opensource.org\/license\/mit-0/p' ../deps/dlmalloc/malloc.c \
-	    > $(REL)/licencas/dlmalloc-MIT-0.txt
-	printf 'cacert.pem: certificados raiz da Mozilla (MPL-2.0), via https://curl.se/ca/cacert.pem\n' \
-	    > $(REL)/licencas/cacert.txt
+	    > $(REL)/licenses/dlmalloc-MIT-0.txt
+	printf 'cacert.pem: Mozilla root certificates (MPL-2.0), from https://curl.se/ca/cacert.pem\n' \
+	    > $(REL)/licenses/cacert.txt
 	cd ../release && zip -qr $(REL_NAME).zip $(REL_NAME)
 	@echo "pacote: release/$(REL_NAME).zip"
 

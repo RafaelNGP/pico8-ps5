@@ -1,90 +1,98 @@
 # pico8_loader
 
-Roda o **PICO-8 oficial para Linux** (`pico8_dyn`, x86-64) num PS5
-desbloqueado, no modelo "traga sua própria licença": você fornece o seu
-`pico8_dyn` e o `pico8.dat`, e nada da Lexaloffle é redistribuído.
+Runs the **official PICO-8 for Linux** (`pico8_dyn`, x86-64) on a
+jailbroken PS5, "bring your own license" style: you provide your own
+`pico8_dyn` and `pico8.dat`, and nothing from Lexaloffle is redistributed.
 
-O loader segue a ideia dos ports Android→PS Vita (`so_loader`): carrega o
-ELF nos endereços originais, resolve os imports com funções nativas e não
-altera o binário.
+The loader follows the idea of the Android→PS Vita ports (`so_loader`): it
+loads the ELF at its original addresses, resolves its imports with native
+functions and never modifies the binary.
 
-## Como funciona
+## How it works
 
-| Peça | O que faz |
+| Part | What it does |
 |---|---|
-| `main.c` | Mapeia o `pico8_dyn` (não-PIE) em `0x400000`/`0x794000`, aplica as relocações, chama `init` e `main` (com `-splore`) numa thread com pilha de 32 MiB. Tem um handler de crash que grava no log. |
-| `shims_libc.c` | Os 125 imports de glibc/libm/libdl sobre a libc do PS5. Trata o que difere: `*_chk`, `__xstat`, `__ctype_*_loc`, `struct dirent`, flags do `open`, `clock`/`clock_gettime`, `dlerror`. O stdout/stderr do PICO-8 vai para o log. |
-| `shims_sdl.c` | Os 91 imports `SDL_*` vão direto para o port PS5 do SDL2 (a ABI do SDL2 é estável). Alguns passam por wrappers que registram no log. |
-| `net_curl.c` | Responde ao `dlopen("libcurl.so")` do Splore com uma libcurl real (8.18 + mbedTLS). |
-| `paths.c` | Acha o `pico8_dyn`, o `pico8.dat` e o `cacert.pem` dentro da pasta do app, confere a versão e avisa em português se faltar algo. |
-| `p8_alloc.c` | Heap próprio (dlmalloc em mspace, crescendo por `mmap`) para o PICO-8, o SDL e o curl. |
+| `main.c` | Reserves the low address window, maps the (non-PIE) `pico8_dyn` at the addresses from its own program headers, applies the relocations and calls `init` and `main` (with `-splore`) on a thread with a 32 MiB stack. A crash handler writes registers, stack and the last calls to the log. |
+| `shims_libc.c` | The 125 glibc/libm/libdl imports, on top of the PS5 libc. Handles what differs: `*_chk`, `__xstat`, `__ctype_*_loc`, `struct dirent`, `open` flags, `clock`/`clock_gettime`, `dlerror`. PICO-8's stdout/stderr goes to the log. |
+| `shims_sdl.c` | The 91 `SDL_*` imports go straight to the PS5 port of SDL2 (the SDL2 ABI is stable). A few go through wrappers that log. |
+| `net_curl.c` | Answers Splore's `dlopen("libcurl.so")` with a real libcurl (8.18 + mbedTLS). |
+| `paths.c` | Finds `pico8_dyn`, `pico8.dat` and `cacert.pem` inside the app folder, checks the version and tells the user (in English) what is missing. |
+| `p8_alloc.c` | Private heap (dlmalloc mspace, growing with `mmap`) for PICO-8, SDL and curl. |
 
-O mesmo código roda de dois jeitos: como **app nativo**
-(`../pico8_app`, `eboot.bin` com ícone na Home, o modo normal) ou como
-**payload** do ps5-payload-sdk lançado pelo websrv (desenvolvimento).
+The same code runs in two ways: as a **native app** (`../pico8_app`, an
+`eboot.bin` with a Home icon, the normal mode) or as a ps5-payload-sdk
+**payload** launched through websrv (development).
 
-Particularidades do PS5 descobertas no caminho:
+PS5 quirks found along the way:
 
-- Dar `PROT_EXEC` a parte de um `mmap` anônimo tira a escrita do
-  mapeamento inteiro. Por isso TEXT, thunks e DATA são três `mmap`s.
-- Só o app em primeiro plano aparece na TV. Por isso o loader roda
-  dentro do próprio `eboot.bin` do app. No modo payload, quem faz esse
-  papel é o hbldr do [websrv](https://github.com/ps5-payload-dev/websrv),
-  que abre um app fake e roda o ELF dentro dele.
-- Um payload em segundo plano só consegue 32 MiB de memória de vídeo; o
-  SDL pede 64 MiB (`deps/patches/sdl2-dmem-fallback.patch`).
-- O TLS nativo (`sceHttp2`) falhou com `0x8095f00c` nos downloads HTTPS;
-  por isso a libcurl com mbedTLS.
+- Making part of an anonymous `mmap` `PROT_EXEC` removes write access from
+  the whole mapping. That's why TEXT, thunks and DATA are three separate
+  `mmap`s.
+- The kernel hands out low addresses first, so the loader reserves
+  `0x400000`–`0x2400000` (`PROT_NONE`, which costs no memory) before any
+  allocation. The real ranges then come from `pico8_dyn`'s `PT_LOAD`
+  headers, so a larger future version fits without code changes.
+- Only the foreground app is shown on the TV. That's why the loader runs
+  inside the app's own `eboot.bin`. In payload mode, the hbldr of
+  [websrv](https://github.com/ps5-payload-dev/websrv) does that job by
+  opening a fake app and running the ELF inside it.
+- A background payload only gets 32 MiB of video memory, while SDL asks
+  for 64 MiB (`deps/patches/sdl2-dmem-fallback.patch`).
+- Native TLS (`sceHttp2`) failed with `0x8095f00c` on HTTPS downloads,
+  hence libcurl with mbedTLS.
 
-Particularidades de rodar como app nativo, em vez de payload:
+Quirks of running as a native app instead of a payload:
 
-- O kernel carrega o eboot em `0x400000 + vaddr`, bem onde o `pico8_dyn`
-  precisa ficar. O `pico8_app/TEXT_BASE` (`0x1000000`) e o
-  `deps/patches/boilerplate-native.patch` movem o eboot para `0x1400000`.
-- O app nasce no sandbox, sem acesso a `/data`. A elevação do boilerplate
-  (via elfldr local) libera o filesystem.
-- O rtld deixa em NULL, ou num placeholder sem nada mapeado
-  (`0x840000000`), os imports de módulos que ele não carrega:
-  `libSceKeyboard`, `libSceImeDialog`, `libScePosixForWebKit` e
-  `libkernel_sys`. Corrigir o GOT em runtime não segura, porque o rtld
-  regrava o slot. A correção é no link: definir a função no app
-  (`pico8_app/src/app_glue.cpp`) ou puxar o objeto da `libc.a` do SDK
-  (`pico8_app/build.env`). O `app_check.c` lista no log o que ficou sem
-  resolver.
-- Funções que resolvem podem saltar para um placeholder por dentro: o
-  `getcwd` da `libSceLibcInternal` faz isso, e por isso o app tem o seu
-  próprio.
-- O heap da libc do sistema tem capacidade fixa pequena: um `malloc` de
-  8 MB falha e, a partir daí, até `malloc(12)` falha, mesmo com centenas
-  de MB livres. Por isso existe o `p8_alloc.c`.
-- No handler de sinal, o `mcontext` fica em `+64` no ucontext, e não em
-  `+16` como dizem os headers do SDK.
+- The kernel loads the eboot at `0x400000 + vaddr`, right where
+  `pico8_dyn` has to go. `pico8_app/TEXT_BASE` (`0x4000000`) and
+  `deps/patches/boilerplate-native.patch` move the eboot to `0x4400000`,
+  above the reserved window.
+- The app starts sandboxed, without access to `/data`. The boilerplate's
+  elevation (through the local elfldr) unlocks the filesystem. After it,
+  `/app0` is no longer visible; the app folder shows up at
+  `/mnt/sandbox/<titleId>_000/app0`.
+- The rtld leaves imports from modules it doesn't load as NULL, or as a
+  placeholder with nothing mapped (`0x840000000`): `libSceKeyboard`,
+  `libSceImeDialog`, `libScePosixForWebKit` and `libkernel_sys`. Patching
+  the GOT at runtime doesn't stick, because the rtld rewrites the slot.
+  The fix is at link time: define the function in the app
+  (`pico8_app/src/app_glue.cpp`) or pull the object from the SDK's `libc.a`
+  (`pico8_app/build.env`). `app_check.c` logs whatever is left unresolved.
+- Functions that do resolve may jump to a placeholder internally:
+  `libSceLibcInternal`'s `getcwd` does, which is why the app has its own.
+- The system libc heap has a small fixed capacity: an 8 MB `malloc` fails,
+  and from then on even `malloc(12)` fails, with hundreds of MB still
+  free. That's why `p8_alloc.c` exists.
+- In the signal handler, `mcontext` sits at `+64` in the ucontext, not at
+  `+16` as the SDK headers say.
 
-## Uso
+## Usage
 
-A instalação normal está no [README do projeto](../README.md):
-`make upload-data` e depois `make install-app`.
+The normal installation is described in the [project README](../README.md):
+`make upload-data`, then `make install-app`.
 
-Para desenvolver o loader como payload, sem reempacotar o app:
+To develop the loader as a payload, without repackaging the app:
 
 ```bash
 export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
-make              # compila SDL2, libcurl e o loader (a 1ª vez demora)
-make websrv       # inicia o websrv (repetir após reiniciar o PS5)
-make run          # envia para /data/pico8/pico8_loader.elf e abre via hbldr
-make log          # mostra /data/pico8/loader.log
+make              # builds SDL2, libcurl and the loader (slow the first time)
+make websrv       # starts websrv (repeat after rebooting the PS5)
+make run          # uploads to /data/pico8/pico8_loader.elf and opens it via hbldr
+make log          # prints /data/pico8/loader.log
 ```
 
-O IP do PS5 é `<PS5_IP>` por padrão; para outro, use `PS5_HOST=<ip>`.
+The PS5 IP defaults to `<PS5_IP>`; for another one, use `PS5_HOST=<ip>`.
 
-## Onde ficam os arquivos no PS5
+## Where files live on the PS5
 
-- `/data/homebrew/PPSA99808/`: o app (`make install-app`), o `cacert.pem` e,
-  em `pico8/`, o `pico8_dyn` e o `pico8.dat` do usuário (`make upload-data`).
-  O `paths.c` procura nesta ordem: `/app0`,
-  `/mnt/sandbox/PPSA99808_000/app0` (o mesmo lugar visto depois da
-  elevação), `/data/homebrew/PPSA99808` e, por fim, o layout antigo em
+- `/data/homebrew/PPSA99808/`: the app (`make install-app`), `cacert.pem`
+  and, in `pico8/`, the user's `pico8_dyn` and `pico8.dat`
+  (`make upload-data`). `paths.c` searches, in order: `/app0`,
+  `/mnt/sandbox/PPSA99808_000/app0` (the same folder as seen after
+  elevation), `/data/homebrew/PPSA99808` and, last, the old layout in
   `/data/pico8`.
-- `/data/pico8/`: o que o PICO-8 escreve (`.lexaloffle/pico-8/`, com
-  config, favoritos, carts e saves) e o `loader.log`.
-- `/data/pico8/pico8_loader.elf`: o loader como payload (`make run`).
+- `/data/pico8/`: what PICO-8 writes (`.lexaloffle/pico-8/`, with config,
+  favourites, carts and saves) and `loader.log`.
+- `/data/pico8/pico8_loader.elf`: the loader as a payload (`make run`).
+
+The `loader.log` messages themselves are still in Portuguese.
