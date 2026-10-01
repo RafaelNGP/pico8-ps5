@@ -1,4 +1,6 @@
 /* pico8_app - avisa sobre imports que o rtld nao resolveu.
+ * Copyright (C) 2026 RafaelNGP
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Num app, o slot do GOT de um import cujo modulo o rtld nao carregou fica
  * em NULL ou num placeholder sem nada mapeado (visto: 0x840000000), e so

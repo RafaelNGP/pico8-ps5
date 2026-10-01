@@ -71,7 +71,9 @@ Limitations: USB keyboards and the on-screen keyboard don't work. Tested
 on a single PS5; other firmware versions may need adjustments.
 
 
-Licenses
---------
-Source code: @SOURCE@ (commit @COMMIT@).
+License
+-------
+PICO-8 for PS5 is free software under the GNU General Public License,
+version 3 or later (see LICENSE). Source code: @SOURCE@ (commit @COMMIT@).
 The license notices of the bundled components are in licenses/.
+PICO-8 itself is not part of this package and is (c) Lexaloffle Games.

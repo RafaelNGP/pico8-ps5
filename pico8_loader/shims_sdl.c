@@ -1,4 +1,6 @@
 /* shims_sdl.c - imports SDL2 do pico8_dyn -> port PS5 do SDL2
+ * Copyright (C) 2026 RafaelNGP
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * A ABI publica do SDL2 eh estavel desde a 2.0, entao o pico8 (feito
  * contra SDL 2.0.x do Linux) chama direto o SDL 2.30 do PS5

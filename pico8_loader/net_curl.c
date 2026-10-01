@@ -1,4 +1,6 @@
 /* net_curl.c - responde ao dlopen("libcurl.so") do pico8
+ * Copyright (C) 2026 RafaelNGP
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * O Splore faz dlopen("libcurl.so") e pega por dlsym curl_easy_init,
  * _setopt, _perform, _cleanup e _strerror. Linkamos a libcurl real

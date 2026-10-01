@@ -1,4 +1,7 @@
-/* pico8_loader - definicoes compartilhadas */
+/* pico8_loader - definicoes compartilhadas
+ * Copyright (C) 2026 RafaelNGP
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 #pragma once
 
 #include <stdio.h>

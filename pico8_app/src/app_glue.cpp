@@ -1,4 +1,6 @@
 /* pico8_app - ganchos do pico8_loader quando ele roda como eboot.bin
+ * Copyright (C) 2026 RafaelNGP
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Como app nativo, o loader nasce no sandbox e nao enxerga /data. O
  * helper de elevacao do boilerplate (via elfldr local) libera o

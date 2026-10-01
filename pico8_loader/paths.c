@@ -1,4 +1,6 @@
 /* paths - onde ficam os arquivos do PICO-8 e o cacert.pem
+ * Copyright (C) 2026 RafaelNGP
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Como app nativo, tudo que o usuario instala fica dentro da pasta do app:
  * o pacote traz <titleId>/cacert.pem e o usuario poe o pico8_dyn e o

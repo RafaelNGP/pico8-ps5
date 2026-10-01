@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (C) 2026 RafaelNGP
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
 # Compila o port PS5 do SDL2 (ps5-payload-dev/SDL) como lib estatica em
 # deps/sdl2, sem precisar de root nem instalar no /opt.
 set -euo pipefail

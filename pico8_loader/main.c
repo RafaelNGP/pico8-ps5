@@ -1,4 +1,6 @@
 /* pico8_loader - carrega o pico8_dyn (Linux x86-64, nao-PIE) no PS5
+ * Copyright (C) 2026 RafaelNGP
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Mapeia os segmentos nos enderecos do proprio ELF, liga os imports
  * (libc pelos shims de shims_libc.c, SDL direto no port PS5 do SDL2) e

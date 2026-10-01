@@ -100,3 +100,16 @@ The `make release` zip contains the `PPSA99808` folder with a generic icon
 | `pico8_app/` | packages the loader as a native app (`eboot.bin`), plus the package texts in `release/`. |
 | `deps/` | build scripts for SDL2, libcurl and the app, plus patches and dlmalloc. |
 | `mmap_probe/`, `app_probe/` | feasibility tests run on the console (fixed addresses and code execution). |
+
+## License
+
+PICO-8 for PS5 is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License, version 3 or (at your option) any
+later version. See [LICENSE](LICENSE).
+
+The app bundles code under other licenses, all compatible with the GPL-3.0:
+[ps5-native-app-boilerplate](https://github.com/blackbearreloaded/ps5-native-app-boilerplate)
+(GPL-3.0-or-later), SDL2 (zlib), curl (curl license), mbedTLS (Apache-2.0) and
+dlmalloc (MIT-0). Their notices ship in the release zip under `licenses/`.
+
+PICO-8 is (c) Lexaloffle Games and is not included: you need your own copy.

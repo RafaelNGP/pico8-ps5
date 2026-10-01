@@ -1,3 +1,6 @@
+# Copyright (C) 2026 RafaelNGP
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
 # pico8_loader - build do app nativo (../pico8_app) e atalhos para o PS5
 #
 # Uso:
@@ -72,6 +75,7 @@ release: ../deps/cacert.pem
 	cp $(APP)/release/PUT-YOUR-FILES-HERE.txt $(REL)/$(TITLE_ID)/pico8/
 	sed -e 's|@VERSION@|$(VERSION)|' -e 's|@COMMIT@|$(COMMIT)|' -e 's|@TITLE_ID@|$(TITLE_ID)|g' \
 	    -e 's|@SOURCE@|$(SOURCE_URL)|' $(APP)/release/README.txt > $(REL)/README.txt
+	cp ../LICENSE                                   $(REL)/LICENSE
 	cp ../deps/boilerplate/LICENSE                  $(REL)/licenses/boilerplate-GPL-3.0.txt
 	cp ../deps/boilerplate/THIRD_PARTY_NOTICES.md   $(REL)/licenses/boilerplate-THIRD_PARTY_NOTICES.md
 	cp ../deps/SDL/LICENSE.txt                      $(REL)/licenses/SDL2-zlib.txt

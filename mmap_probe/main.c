@@ -1,4 +1,6 @@
 /* mmap_probe - PICO-8 PS5 loader feasibility test
+ * Copyright (C) 2026 RafaelNGP
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * O pico8_dyn eh um ELF nao-PIE que exige carga em endereco fixo:
  *   LOAD  0x0000000000400000  R E  (~1.6 MB)
