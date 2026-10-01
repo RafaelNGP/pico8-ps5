@@ -4,7 +4,8 @@ Este é o **primeiro passo** do projeto. Ele não carrega o PICO-8.
 Responde uma única pergunta que decide a arquitetura de todo o resto:
 
 > O processo de homebrew no PS5 consegue reservar a faixa de endereços
-> fixos que o `pico8_dyn` exige (`0x400000`–`0xb6f000`)?
+> fixos que o `pico8_dyn` exige (`0x400000`–`0xb70000`) e tornar essa
+> memória executável?
 
 O `pico8_dyn` é um ELF **não-PIE**, então precisa ser carregado nesses
 endereços exatos. Se o PS5 liberar a faixa, o loader usa os endereços
@@ -13,18 +14,18 @@ linkar o próprio loader num endereço alto para desocupar a faixa.
 
 ## Pré-requisitos
 
-- Um PC Linux (seu Nobara serve) com o **ps5-payload-sdk** instalado:
+- Um PC Linux (seu Nobara serve) com o **ps5-payload-sdk** instalado.
+  No Fedora/Nobara o `llvm-config` vem no pacote `llvm-devel`; sem ele o
+  `Makefile.inc` do SDK deixa `LLVM_CONFIG` vazio e o compilador vira `/clang`:
   ```bash
-  git clone https://github.com/ps5-payload-dev/sdk ps5-payload-sdk
-  cd ps5-payload-sdk
-  sudo apt-get install build-essential cmake clang clang-15 lld lld-15   # ou os equivalentes do Fedora/Nobara
-  make
-  sudo make DESTDIR=/opt/ps5-payload-sdk install
+  sudo dnf install clang lld llvm llvm-devel make cmake python3-pyelftools
+  cd ~/pico-8/ps5-payload-sdk
+  make LLVM_CONFIG=/usr/bin/llvm-config
+  sudo make LLVM_CONFIG=/usr/bin/llvm-config DESTDIR=/opt/ps5-payload-sdk install
   export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
   ```
 - Um **PS5 já jailbroken** com um ELF loader ativo na porta **9021**
   (Relapse + etaHEN/elfldr, firmware ≤ 13.60).
-- `netcat` (`nc`) no PC.
 - PS5 e PC na **mesma rede**.
 
 ## Build
@@ -41,14 +42,14 @@ Isso gera `mmap_probe.elf`.
 
 1. No PS5 já jailbroken, deixe o ELF loader escutando na porta 9021
    (é o estado normal depois de rodar o Relapse + elfldr).
-2. Descubra o IP do PS5 (Ajustes → Rede → Status da conexão).
+2. O IP do PS5 (<PS5_IP>) já é o padrão no Makefile; para outro, use `make test PS5_HOST=<ip>`.
 3. No PC:
    ```bash
-   make test PS5_HOST=192.168.x.x
+   make test
    ```
-   ou manualmente:
+   ou manualmente (o `nc` do Fedora é o `ncat`, que não aceita `-q0`):
    ```bash
-   nc -q0 192.168.x.x 9021 < mmap_probe.elf
+   ncat --send-only <PS5_IP> 9021 < mmap_probe.elf
    ```
 
 ## Lendo o resultado
@@ -57,7 +58,9 @@ O probe reporta de duas formas:
 
 - **Toast na tela do PS5** (via `notify`): aparece uma notificação no
   canto. A última linha é a que importa:
-  - `RESULTADO: VIAVEL` → a faixa está livre. Seguimos com endereços nativos.
+  - `RESULTADO: VIAVEL` → faixa livre e executável. Seguimos com endereços nativos.
+  - `RESULTADO: PARCIAL` → faixa livre, mas o kernel nega `PROT_EXEC` em
+    memória anônima (ou o código travou — veja a última mensagem `EXEC:`).
   - `RESULTADO: BLOQUEADO` → precisamos do plano B (relink alto).
 - **Log no PC**: se você tiver o `klog`/stdout do SDK capturando a saída
   (ex. `nc -l` na porta de log, conforme seu setup do etaHEN), verá as
@@ -72,12 +75,14 @@ próximo passo:
 
 ## O que o probe faz, em detalhe
 
-1. `TEXT 0x400000` — tenta reservar só o segmento de código (~1,6 MB),
-   escreve e lê de volta para provar que a página é utilizável.
-2. `DATA 0x795000` — o mesmo para o segmento de dados+BSS (~3,9 MB).
-3. `FAIXA INTEIRA` — reserva os dois de uma vez (~7,5 MB), que é o que o
-   loader real fará antes de copiar os segmentos do `pico8_dyn`.
+1. `FAIXA 0x400000-0xb70000` — reserva TEXT+DATA+BSS de uma vez (~7,5 MB,
+   alinhado a páginas de 16 KiB), escreve e lê nas pontas.
+2. `EXEC` — copia `mov eax, 42; ret` para o início da faixa, faz
+   `mprotect(R+X)` e chama. Sem isso não adianta ter a faixa.
+3. Se a faixa inteira falhar, testa `TEXT 0x400000` e `DATA 0x794000`
+   separados para mostrar qual pedaço está ocupado.
 
-Cada `mmap` usa `MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE`. Se o kernel
-devolver um endereço diferente do pedido, o probe trata como falha de
-propósito, para não mascarar o resultado.
+O `mmap` usa `MAP_FIXED | MAP_EXCL`: no FreeBSD, `MAP_FIXED` sozinho
+substitui em silêncio qualquer mapeamento existente, o que daria "OK"
+falso (e poderia derrubar o próprio payload). Se o kernel não aceitar
+`MAP_EXCL`, cai para um mmap só com hint, que nunca sobrescreve.
