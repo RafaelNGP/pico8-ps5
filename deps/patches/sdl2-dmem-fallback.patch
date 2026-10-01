@@ -1,0 +1,24 @@
+diff --git a/src/video/ps5/SDL_ps5video.c b/src/video/ps5/SDL_ps5video.c
+index a62be0e8e..6cd6d362e 100644
+--- a/src/video/ps5/SDL_ps5video.c
++++ b/src/video/ps5/SDL_ps5video.c
+@@ -207,11 +207,17 @@ static int PS5_VideoInit(_THIS)
+     if (device_data->handle < 0) {
+         return SDL_SetError("sceVideoOutOpen: %s", strerror(errno));
+     }
++    /* 64 MiB permite modos 4K. Payloads iniciados pelo elfldr so
++     * conseguem 32 MiB, que ainda cabem dois framebuffers 1080p. */
+     device_data->memsize = 0x4000000;
+     if (sceKernelAllocateMainDirectMemory(device_data->memsize, 0x20000, 3,
+                                           &device_data->paddr)) {
+-        return SDL_SetError("sceKernelAllocateMainDirectMemory: %s",
+-                            strerror(errno));
++        device_data->memsize = 0x2000000;
++        if (sceKernelAllocateMainDirectMemory(device_data->memsize, 0x20000, 3,
++                                              &device_data->paddr)) {
++            return SDL_SetError("sceKernelAllocateMainDirectMemory: %s",
++                                strerror(errno));
++        }
+     }
+ 
+     if (sceKernelMapDirectMemory(&vaddr, device_data->memsize, 0x33, 0,
