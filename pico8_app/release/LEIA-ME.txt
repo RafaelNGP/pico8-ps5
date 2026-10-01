@@ -1,0 +1,69 @@
+PICO-8 no PS5 - versao @VERSION@
+=================================
+
+App nativo que roda o PICO-8 oficial para Linux num PS5 desbloqueado,
+com icone proprio na Home. Abre direto no Splore e funciona com o
+DualSense, com audio e com download de carts.
+
+Este pacote NAO contem o PICO-8. Voce precisa da sua copia, a versao
+Linux 64-bit comprada em https://www.lexaloffle.com/pico-8.php
+
+
+Requisitos no PS5
+-----------------
+- kstuff e ShadowMountPlus rodando.
+- elfldr ouvindo em 127.0.0.1:9021 (costuma vir junto do kstuff ou do
+  Payload Manager). O app usa o elfldr para liberar o acesso a /data,
+  o mesmo mecanismo do ProsperoEden.
+- Um servidor FTP (ex.: ftpsrv), so para copiar os arquivos.
+
+
+Instalacao
+----------
+1. Copie por FTP a pasta  data/homebrew/PICO8/  deste pacote para
+   /data/homebrew/PICO8/  no PS5.
+
+2. Copie  data/pico8/cacert.pem  deste pacote para  /data/pico8/  no PS5.
+
+3. Do zip Linux do seu PICO-8, copie para  /data/pico8/  no PS5:
+       pico8_dyn
+       pico8.dat
+
+4. Em ate ~15 s, o ShadowMountPlus registra o icone PICO-8 na Home.
+   Abra por ali.
+
+No fim, o PS5 deve ter:
+
+   /data/homebrew/PICO8/eboot.bin
+   /data/homebrew/PICO8/sandbox-elevator.elf
+   /data/homebrew/PICO8/sce_module/libc.prx
+   /data/homebrew/PICO8/sce_sys/param.json
+   /data/homebrew/PICO8/sce_sys/icon0.png
+   /data/pico8/pico8_dyn
+   /data/pico8/pico8.dat
+   /data/pico8/cacert.pem
+
+Para atualizar, feche o app no PS5 e substitua os arquivos de
+/data/homebrew/PICO8/. Os dados de /data/pico8/ continuam valendo.
+
+
+Onde ficam seus dados
+---------------------
+/data/pico8/.lexaloffle/pico-8/  config, favoritos, carts baixados e saves
+/data/pico8/loader.log           log da ultima execucao
+
+
+Problemas
+---------
+Se o app fechar sozinho ou travar, o /data/pico8/loader.log diz onde: o
+crash vem com registradores, pilha e as ultimas chamadas de libc/SDL.
+Leve esse arquivo ao relatar o problema.
+
+Limitacoes: teclado USB e teclado na tela nao funcionam. Testado num
+unico PS5; outro firmware pode precisar de ajustes.
+
+
+Licencas
+--------
+Codigo-fonte: @SOURCE@ (commit @COMMIT@).
+Os avisos de licenca dos componentes incluidos estao em licencas/.

@@ -20,4 +20,4 @@ app_probe/build/
 deps/boilerplate/
 
 # Pacotes gerados por make release
-release/
+/release/
