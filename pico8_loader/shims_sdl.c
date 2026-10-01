@@ -203,3 +203,11 @@ const shim_t shims_sdl[] = {
     D(SDL_WarpMouseInWindow),
     { NULL, NULL }
 };
+
+/* O SDL aloca pelo heap proprio (p8_alloc.c). Precisa vir antes de
+ * qualquer alocacao do SDL, ou seja, antes do pico8 rodar. */
+void shims_sdl_init(void)
+{
+    int r = SDL_SetMemoryFunctions(p8_malloc, p8_calloc, p8_realloc, p8_free);
+    lg("SDL_SetMemoryFunctions = %d", r);
+}

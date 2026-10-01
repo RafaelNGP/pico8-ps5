@@ -43,3 +43,13 @@ void *net_curl_dlsym(void *h, const char *name);
 
 /* Prepara tabelas de ctype no formato glibc. */
 void shims_libc_init(void);
+
+void shims_sdl_init(void);
+
+/* Heap proprio (p8_alloc.c). */
+void p8_alloc_init(void);
+void *p8_malloc(size_t size);
+void *p8_calloc(size_t n, size_t size);
+void *p8_realloc(void *ptr, size_t size);
+void p8_free(void *ptr);
+char *p8_strdup(const char *s);

@@ -77,6 +77,14 @@ static int *sh_errno_location(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* Memoria                                                             */
+
+/* O pico8 aloca pelo heap proprio (p8_alloc.c): o do sistema esgota. */
+int sceKernelAvailableFlexibleMemorySize(size_t *);
+int sceKernelAvailableDirectMemorySize(off_t, off_t, size_t, off_t *, size_t *);
+off_t sceKernelGetDirectMemorySize(void);
+
+/* ------------------------------------------------------------------ */
 /* dlopen: so a libcurl existe, emulada sobre sceHttp2 (net_curl.c) */
 
 /* Como no dlfcn real, dlerror() devolve NULL se nao houve erro desde a
@@ -405,6 +413,16 @@ static const int32_t *ctype_upper_ptr = ctype_upper + 128;
 
 void shims_libc_init(void)
 {
+    size_t dmem_free = 0;
+    off_t dmem_start = 0;
+    sceKernelAvailableDirectMemorySize(0, sceKernelGetDirectMemorySize(), 0,
+                                       &dmem_start, &dmem_free);
+    size_t flex = 0;
+    sceKernelAvailableFlexibleMemorySize(&flex);
+    lg("[mem] direta: total %zu, maior bloco livre %zu; flexivel livre %zu",
+       (size_t)sceKernelGetDirectMemorySize(), dmem_free, flex);
+    p8_alloc_init();
+
     for (int i = 0; i < 384; i++) {
         int c = i - 128;
         unsigned short m = 0;
@@ -472,7 +490,8 @@ const shim_t shims_libc[] = {
     S("dlerror", sh_dlerror),
 
     /* memoria */
-    D(malloc), D(calloc), D(realloc), D(free),
+    S("malloc", p8_malloc), S("calloc", p8_calloc),
+    S("realloc", p8_realloc), S("free", p8_free),
     D(memchr), D(memcmp), D(memcpy), D(memmove), D(memset),
     S("__memcpy_chk", sh_memcpy_chk),
     S("__memset_chk", sh_memset_chk),

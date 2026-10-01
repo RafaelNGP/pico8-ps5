@@ -2,21 +2,23 @@
 #
 # Uso:
 #   export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
-#   make              # gera pico8_loader.elf
-#   make upload-data  # envia pico8_dyn + pico8.dat por FTP (uma vez)
-#   make deploy       # envia o loader ao Payload Manager (segundo plano, sem video)
-#   make websrv       # baixa e inicia o websrv (necessario para `make run`)
-#   make run          # roda como app em primeiro plano via websrv (com video)
-#   make app          # gera o app da home (icone PICO-8) em ../home_app/build
-#   make install-app  # envia loader + app para /data/homebrew/PICO8 (ShadowMountPlus
-#                     # registra o icone na home em ate ~15 s)
+#   make upload-data  # envia pico8_dyn, pico8.dat e cacert.pem por FTP (uma vez)
+#   make app          # gera o app nativo (eboot.bin) em ../pico8_app/build
+#   make install-app  # envia o app para /data/homebrew/PICO8; o ShadowMountPlus
+#                     # registra o icone PICO-8 na home em ate ~15 s
 #   make log          # baixa /data/pico8/loader.log
+#
+# Desenvolvimento (loader como payload, sem o app):
+#   make              # gera pico8_loader.elf
+#   make websrv       # baixa e inicia o websrv (necessario para `make run`)
+#   make run          # roda em primeiro plano via hbldr do websrv (com video)
 
 PS5_HOST  ?= <PS5_IP>
 FTP_PORT  ?= 2121
 PLDMGR    ?= 8084
 WEBSRV    ?= 8080
 HB_DIR    := /data/homebrew/PICO8
+DEV_ELF   := /data/pico8/pico8_loader.elf
 PICO8_DIR ?= $(HOME)/pico-8
 
 ifdef PS5_PAYLOAD_SDK
@@ -38,8 +40,8 @@ CURL_LIBS := $(CURL)/lib/libcurl.a $(CURL)/lib/libmbedtls.a \
              $(CURL)/lib/libeverest.a $(CURL)/lib/libp256m.a
 
 ELF    := pico8_loader.elf
-SRCS   := main.c shims_libc.c shims_sdl.c net_curl.c
-CFLAGS := -Wall -Werror -O2 -g $(SDL2_CFLAGS) -I$(CURL)/include -DCURL_STATICLIB
+SRCS   := main.c shims_libc.c shims_sdl.c net_curl.c p8_alloc.c
+CFLAGS := -Wall -Werror -O2 -g -I../deps $(SDL2_CFLAGS) -I$(CURL)/include -DCURL_STATICLIB
 
 all: $(ELF)
 
@@ -49,10 +51,14 @@ $(SDL2)/lib/libSDL2.a:
 $(CURL)/lib/libcurl.a:
 	../deps/build_curl.sh
 
-$(ELF): $(SRCS) loader.h $(SDL2)/lib/libSDL2.a $(CURL)/lib/libcurl.a
+$(ELF): $(SRCS) loader.h ../deps/dlmalloc/malloc.c $(SDL2)/lib/libSDL2.a $(CURL)/lib/libcurl.a
 	$(CC) $(CFLAGS) -o $@ $(SRCS) $(SDL2_LIBS) $(CURL_LIBS) -lpthread
 
-upload-data:
+# Certificados raiz para o HTTPS do Splore (o build da libcurl tambem baixa).
+../deps/cacert.pem:
+	curl -fsSLo $@ https://curl.se/ca/cacert.pem
+
+upload-data: ../deps/cacert.pem
 	curl -sS --ftp-create-dirs -T $(PICO8_DIR)/pico8_dyn ftp://$(PS5_HOST):$(FTP_PORT)/data/pico8/
 	curl -sS --ftp-create-dirs -T $(PICO8_DIR)/pico8.dat ftp://$(PS5_HOST):$(FTP_PORT)/data/pico8/
 	curl -sS --ftp-create-dirs -T ../deps/cacert.pem ftp://$(PS5_HOST):$(FTP_PORT)/data/pico8/
@@ -75,22 +81,33 @@ websrv: $(WEBSRV_ELF)
 # websrv (ps5-payload-dev/websrv) abre um app fake e roda o ELF nele.
 run: $(ELF)
 	-@curl -sS -Q "DELE /data/pico8/loader.log" ftp://$(PS5_HOST):$(FTP_PORT)/ >/dev/null 2>&1
-	curl -sS --ftp-create-dirs -T $(ELF) ftp://$(PS5_HOST):$(FTP_PORT)$(HB_DIR)/eboot.elf
-	curl -sS -N -m 30 "http://$(PS5_HOST):$(WEBSRV)/hbldr?path=$(HB_DIR)/eboot.elf&cwd=/data/pico8&pipe=1" || true
+	curl -sS --ftp-create-dirs -T $(ELF) ftp://$(PS5_HOST):$(FTP_PORT)$(DEV_ELF)
+	curl -sS -N -m 30 "http://$(PS5_HOST):$(WEBSRV)/hbldr?path=$(DEV_ELF)&cwd=/data/pico8&pipe=1" || true
 
-# App da home: eboot.bin minimo que pede ao websrv para abrir o loader.
-APP_DIR := ../home_app/build/PPSA99808
+# App nativo: o loader inteiro como eboot.bin do PPSA99808 (../pico8_app).
+APP     := ../pico8_app
+APP_DIR := $(APP)/build/PPSA99808
+BP      := ../deps/boilerplate
 FTP     := ftp://$(PS5_HOST):$(FTP_PORT)
 
-app:
-	../deps/build_home_app.sh
+# A tabela de imports do app (app_imports.c) vem do proprio eboot linkado:
+# gera depois do build e, se mudou, builda de novo.
+app: $(SDL2)/lib/libSDL2.a $(CURL)/lib/libcurl.a
+	../deps/build_app.sh pico8_app
+	cp $(APP)/src/app_imports.c $(APP)/build/app_imports.prev
+	python3 ../deps/gen_app_imports.py $(BP)/build/llvm-pie.elf \
+	    $(BP)/.deps/native/ps5-payload-sdk/target/lib $(APP)/src/app_imports.c
+	cmp -s $(APP)/src/app_imports.c $(APP)/build/app_imports.prev || \
+	    ../deps/build_app.sh pico8_app
 
-install-app: $(ELF) app
-	curl -sS --ftp-create-dirs -T $(ELF) $(FTP)$(HB_DIR)/eboot.elf
-	curl -sS --ftp-create-dirs -T $(APP_DIR)/eboot.bin $(FTP)$(HB_DIR)/eboot.bin
-	curl -sS --ftp-create-dirs -T $(APP_DIR)/sce_module/libc.prx $(FTP)$(HB_DIR)/sce_module/libc.prx
-	curl -sS --ftp-create-dirs -T $(APP_DIR)/sce_sys/icon0.png $(FTP)$(HB_DIR)/sce_sys/icon0.png
-	curl -sS --ftp-create-dirs -T $(APP_DIR)/sce_sys/param.json $(FTP)$(HB_DIR)/sce_sys/param.json
+APP_FILES := eboot.bin sandbox-elevator.elf sce_module/libc.prx \
+             sce_sys/param.json sce_sys/icon0.png
+
+install-app: app
+	-@curl -sS -Q "DELE /data/pico8/loader.log" $(FTP)/ >/dev/null 2>&1
+	for f in $(APP_FILES); do \
+	    curl -sS --ftp-create-dirs -T $(APP_DIR)/$$f $(FTP)$(HB_DIR)/$$f || exit 1; \
+	done
 
 log:
 	@curl -sS ftp://$(PS5_HOST):$(FTP_PORT)/data/pico8/loader.log

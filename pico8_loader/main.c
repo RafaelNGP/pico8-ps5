@@ -71,10 +71,81 @@ void notify(const char *fmt, ...)
 
 static uint8_t fault_stack[64 * 1024];
 
+/* Rastreio dos imports de libc: cada GOT aponta para um thunk que grava
+ * o indice num buffer circular e salta para o shim. No crash, as
+ * ultimas chamadas mostram em que fase o PICO-8 estava. Sem trava:
+ * outra thread pode embaralhar uma entrada, o que basta para depurar. */
+#define TRACE_RING 256  /* potencia de 2: o asm usa TRACE_RING - 1 */
+#define MAX_TRACED 512
+
+uint32_t p8_trace_ring[TRACE_RING];
+uint32_t p8_trace_pos;
+void *p8_trace_target[MAX_TRACED];
+static const char *trace_names[MAX_TRACED];
+static int n_traced;
+
+/* r11 = indice (posto pelo thunk). r10/r11 sao scratch na ABI e rax eh
+ * salvo, pois em funcoes variadicas %al leva o numero de args SSE. */
+__asm__(
+    ".text\n"
+    ".p2align 4\n"
+    "p8_trace_common:\n"
+    "    push %rax\n"
+    "    lea p8_trace_ring(%rip), %rax\n"
+    "    mov p8_trace_pos(%rip), %r10d\n"
+    "    incl p8_trace_pos(%rip)\n"
+    "    and $255, %r10d\n"
+    "    mov %r11d, (%rax,%r10,4)\n"
+    "    lea p8_trace_target(%rip), %rax\n"
+    "    mov (%rax,%r11,8), %r10\n"
+    "    pop %rax\n"
+    "    jmp *%r10\n");
+void p8_trace_common(void);
+
+static void dump_trace(void)
+{
+    uint32_t end = p8_trace_pos;
+    uint32_t n = end < TRACE_RING ? end : TRACE_RING;
+
+    lg("    ultimas %u chamadas de import (de %u), mais recente por ultimo:", n, end);
+    for (uint32_t i = end - n; i != end; i++) {
+        uint32_t idx = p8_trace_ring[i % TRACE_RING];
+        lg("      %s", idx < (uint32_t)n_traced ? trace_names[idx] : "?");
+    }
+}
+
+static pthread_t pico8_tid;
+
+/* CS e SS de modo usuario: seletores de 16 bits, nao nulos, RPL 3. */
+static int user_selectors(const mcontext_t *mc)
+{
+    return mc->mc_cs && mc->mc_cs <= 0xffff && (mc->mc_cs & 3) == 3 &&
+           mc->mc_ss && mc->mc_ss <= 0xffff && (mc->mc_ss & 3) == 3;
+}
+
 static void on_fault(int sig, siginfo_t *si, void *uc_)
 {
-    ucontext_t *uc = uc_;
-    mcontext_t *mc = &uc->uc_mcontext;
+    /* O SDK poe uc_mcontext em +16 (FreeBSD), mas no app o PS5 entrega
+     * 48 bytes a mais antes dele. No layout errado, CS/SS caem em cima de
+     * outros campos (visto: 0xffffffff e 0). */
+    mcontext_t *mc = &((ucontext_t *)uc_)->uc_mcontext;
+    mcontext_t *alt = (mcontext_t *)((char *)uc_ + 64);
+    if (!user_selectors(mc) && user_selectors(alt))
+        mc = alt;
+
+    lg("*** thread %s, si_code=%d si_errno=%d si_addr=%p",
+       pthread_equal(pthread_self(), pico8_tid) ? "do pico8" : "OUTRA",
+       si->si_code, si->si_errno, si->si_addr);
+    lg("    trapno=0x%lx err=0x%lx addr=0x%lx rflags=0x%lx cs=0x%lx",
+       (unsigned long)mc->mc_trapno, (unsigned long)mc->mc_err,
+       (unsigned long)mc->mc_addr, (unsigned long)mc->mc_rflags,
+       (unsigned long)mc->mc_cs);
+    lg("    r8=0x%lx r9=0x%lx r10=0x%lx r11=0x%lx",
+       (unsigned long)mc->mc_r8, (unsigned long)mc->mc_r9,
+       (unsigned long)mc->mc_r10, (unsigned long)mc->mc_r11);
+    lg("    r12=0x%lx r13=0x%lx r14=0x%lx r15=0x%lx",
+       (unsigned long)mc->mc_r12, (unsigned long)mc->mc_r13,
+       (unsigned long)mc->mc_r14, (unsigned long)mc->mc_r15);
 
     lg("*** CRASH sinal %d addr=%p rip=0x%lx rsp=0x%lx", sig, si->si_addr,
        (unsigned long)mc->mc_rip, (unsigned long)mc->mc_rsp);
@@ -87,12 +158,14 @@ static void on_fault(int sig, siginfo_t *si, void *uc_)
 
     /* Os primeiros enderecos de retorno na pilha ajudam a achar quem
      * chamou (o pico8_dyn nao usa frame pointer em tudo). */
+    /* Enderecos de retorno: pico8 (fixo) ou loader (o log mostra a base
+     * do loader para converter em offset do ELF). */
+    dump_trace();
     uint64_t *sp = (uint64_t *)mc->mc_rsp;
-    for (int i = 0; i < 16; i++) {
-        uint64_t v = sp[i];
-        if (v >= P8_TEXT_LO && v < P8_TEXT_HI)
-            lg("    pilha[%d] = 0x%lx (pico8 text)", i, (unsigned long)v);
-    }
+    lg("    loader: on_fault=%p", (void *)on_fault);
+    for (int i = 0; (uint64_t)(uintptr_t)sp >= 0x10000 && i < 24; i++)
+        lg("    pilha[%2d] = 0x%lx%s", i, (unsigned long)sp[i],
+           sp[i] >= P8_TEXT_LO && sp[i] < P8_TEXT_HI ? " (pico8 text)" : "");
     notify("pico8_loader: CRASH sinal %d em rip=0x%lx", sig,
            (unsigned long)mc->mc_rip);
     _exit(128 + sig);
@@ -149,6 +222,26 @@ static void *make_thunk(const char *name)
     t[10] = 0x48; t[11] = 0xB8;
     memcpy(t + 12, &target, 8);
     t[20] = 0xFF; t[21] = 0xE0;
+    return t;
+}
+
+static void *make_trace_thunk(const char *name, void *target)
+{
+    if (n_thunks == MAX_THUNKS || n_traced == MAX_TRACED)
+        return target;
+
+    int idx = n_traced++;
+    uint8_t *t = (uint8_t *)(uintptr_t)(P8_THUNK_LO + (uint64_t)n_thunks++ * THUNK_SIZE);
+    uint64_t common = (uint64_t)(uintptr_t)p8_trace_common;
+
+    trace_names[idx] = name;
+    p8_trace_target[idx] = target;
+    /* mov r11d, idx ; mov r10, p8_trace_common ; jmp r10 */
+    t[0] = 0x41; t[1] = 0xBB;
+    memcpy(t + 2, &(uint32_t){ (uint32_t)idx }, 4);
+    t[6] = 0x49; t[7] = 0xBA;
+    memcpy(t + 8, &common, 8);
+    t[16] = 0x41; t[17] = 0xFF; t[18] = 0xE2;
     return t;
 }
 
@@ -276,7 +369,10 @@ static int relocate(Elf64_Ehdr *eh)
                 n_sdl++;
             }
             if (sh && sh->addr) {
-                addr = sh->addr;
+                /* GLOB_DAT pode ser ponteiro de dado: so as chamadas via
+                 * PLT (libc e SDL) passam pelo rastreio. */
+                addr = type == R_X86_64_JMP_SLOT
+                           ? make_trace_thunk(name, sh->addr) : sh->addr;
             } else {
                 if (sh)
                     lg("AVISO: %s nao existe na libc do PS5", name);
@@ -344,9 +440,15 @@ static char *g_argv[] = { P8_BIN, "-splore", NULL };
 
 extern char **environ;
 
+#ifdef P8_APP
+int p8_app_elevate(void);          /* pico8_app/src/app_glue.cpp */
+void p8_app_check_imports(void);   /* pico8_app/src/app_check.c */
+#endif
+
 static void *pico8_thread(void *arg)
 {
     (void)arg;
+    pico8_tid = pthread_self();
     install_fault_handler();
 
     lg("chamando init (0x%lx)...", (unsigned long)g_init);
@@ -382,12 +484,24 @@ int main(void)
         }
     }
 
+#ifdef P8_APP
+    /* Como eboot.bin, o sandbox esconde /data ate a elevacao. Vem depois
+     * das faixas fixas porque o helper aloca memoria. */
+    int elev = p8_app_elevate();
+#endif
+
     mkdir(P8_DIR, 0777);
     p8_log = fopen(P8_LOG, "w");
+    /* Sem buffer: o stdout/stderr do pico8 tambem vem para ca, e uma
+     * linha sem '\n' se perderia num crash. */
     if (p8_log)
-        setvbuf(p8_log, NULL, _IOLBF, 0);
+        setvbuf(p8_log, NULL, _IONBF, 0);
 
     lg("==== pico8_loader ====");
+#ifdef P8_APP
+    lg("app nativo, elevacao status=%d (0=ok)", elev);
+    p8_app_check_imports();
+#endif
     notify("pico8_loader iniciado");
 
     if (map_fail) {
@@ -418,6 +532,7 @@ int main(void)
     close(fd);
 
     shims_libc_init();
+    shims_sdl_init();
     if (relocate(&eh) != 0) {
         notify("pico8_loader: falha nas relocacoes (ver log)");
         return 1;

@@ -20,7 +20,8 @@ static pthread_once_t curl_once = PTHREAD_ONCE_INIT;
 
 static void curl_init_once(void)
 {
-    CURLcode r = curl_global_init(CURL_GLOBAL_DEFAULT);
+    CURLcode r = curl_global_init_mem(CURL_GLOBAL_DEFAULT, p8_malloc, p8_free,
+                                      p8_realloc, p8_strdup, p8_calloc);
     lg("curl: %s, global_init = %d", curl_version(), r);
 }
 

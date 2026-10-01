@@ -14,6 +14,7 @@ deps/*.log
 # Binarios de terceiros baixados (websrv)
 tools/
 
-# App da home (build local)
-home_app/build/
+# Apps nativos (build local)
+pico8_app/build/
+app_probe/build/
 deps/boilerplate/
