@@ -19,5 +19,8 @@ pico8_app/build/
 app_probe/build/
 deps/boilerplate/
 
+# Configuracao local (ex.: PS5_HOST := <ip>)
+pico8_loader/local.mk
+
 # Pacotes gerados por make release
 /release/

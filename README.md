@@ -75,7 +75,8 @@ Only needed for development. To just play, use the zip.
 ```bash
 cd pico8_loader
 export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
-export PS5_HOST=192.168.0.50   # your PS5's IP (FTP on port 2121)
+export PS5_HOST=192.168.0.50   # your PS5's IP (FTP on port 2121); or put
+                               # "PS5_HOST := <ip>" in pico8_loader/local.mk
 
 make install-app   # builds the app and uploads it to /data/homebrew/PPSA99808
 make upload-data   # once: uploads pico8_dyn and pico8.dat to PPSA99808/pico8/

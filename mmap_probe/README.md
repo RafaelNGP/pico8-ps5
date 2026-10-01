@@ -44,15 +44,14 @@ This produces `mmap_probe.elf`.
 ## Running it on the PS5
 
 1. On the jailbroken PS5, keep the ELF loader listening on port 9021.
-2. The PS5 IP defaults to `<PS5_IP>` in the Makefile; for another one,
-   use `make test PS5_HOST=<ip>`.
+2. Pass the PS5's IP: `make test PS5_HOST=<ip>` (or export `PS5_HOST`).
 3. On the PC:
    ```bash
-   make test
+   make test PS5_HOST=192.168.0.50
    ```
    or by hand (Fedora's `nc` is `ncat`, which doesn't accept `-q0`):
    ```bash
-   ncat --send-only <PS5_IP> 9021 < mmap_probe.elf
+   ncat --send-only 192.168.0.50 9021 < mmap_probe.elf
    ```
 
 ## Reading the result

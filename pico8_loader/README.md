@@ -81,7 +81,8 @@ make run          # uploads to /data/pico8/pico8_loader.elf and opens it via hbl
 make log          # prints /data/pico8/loader.log
 ```
 
-The PS5 IP defaults to `<PS5_IP>`; for another one, use `PS5_HOST=<ip>`.
+The targets that talk to the PS5 need its IP: pass `PS5_HOST=<ip>`, export
+it, or put `PS5_HOST := <ip>` in `pico8_loader/local.mk` (ignored by git).
 
 ## Where files live on the PS5
 

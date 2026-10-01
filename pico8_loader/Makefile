@@ -11,10 +11,12 @@
 #
 # Desenvolvimento (loader como payload, sem o app):
 #   make              # gera pico8_loader.elf
-#   make websrv       # baixa e inicia o websrv (necessario para `make run`)
+#   make websrv       # inicia o websrv pelo Payload Manager (para `make run`)
 #   make run          # roda em primeiro plano via hbldr do websrv (com video)
 
-PS5_HOST  ?= <PS5_IP>
+# IP do PS5: PS5_HOST=<ip> na linha de comando, no ambiente ou num
+# local.mk (fora do git) com "PS5_HOST := <ip>".
+-include local.mk
 FTP_PORT  ?= 2121
 PLDMGR    ?= 8084
 WEBSRV    ?= 8080
@@ -63,13 +65,9 @@ $(ELF): $(SRCS) loader.h ../deps/dlmalloc/malloc.c $(SDL2)/lib/libSDL2.a $(CURL)
 
 # Os arquivos do PICO-8 do usuario ficam dentro da pasta do app
 # (pico8_loader/paths.c), como os de firmware no ProsperoEden.
-upload-data:
+upload-data: need-host
 	curl -sS --ftp-create-dirs -T $(PICO8_DIR)/pico8_dyn ftp://$(PS5_HOST):$(FTP_PORT)$(HB_DIR)/pico8/
 	curl -sS --ftp-create-dirs -T $(PICO8_DIR)/pico8.dat ftp://$(PS5_HOST):$(FTP_PORT)$(HB_DIR)/pico8/
-
-deploy: $(ELF)
-	-@curl -sS -Q "DELE /data/pico8/loader.log" ftp://$(PS5_HOST):$(FTP_PORT)/ >/dev/null 2>&1
-	./deploy.sh $(PS5_HOST) $(PLDMGR) $(ELF)
 
 WEBSRV_VER := v0.34
 WEBSRV_ELF := ../tools/websrv-ps5.elf
@@ -78,12 +76,16 @@ $(WEBSRV_ELF):
 	mkdir -p ../tools
 	curl -fsSL -o $@ https://github.com/ps5-payload-dev/websrv/releases/download/$(WEBSRV_VER)/websrv-ps5.elf
 
-websrv: $(WEBSRV_ELF)
+# Alvos que falam com o PS5 precisam do IP.
+need-host:
+	@test -n "$(PS5_HOST)" || { echo "defina PS5_HOST=<ip do PS5> (ou crie pico8_loader/local.mk)" >&2; exit 1; }
+
+websrv: $(WEBSRV_ELF) need-host
 	./deploy.sh $(PS5_HOST) $(PLDMGR) $(WEBSRV_ELF)
 
 # O video do PS5 so aparece para o app em primeiro plano. O hbldr do
 # websrv (ps5-payload-dev/websrv) abre um app fake e roda o ELF nele.
-run: $(ELF)
+run: $(ELF) need-host
 	-@curl -sS -Q "DELE /data/pico8/loader.log" ftp://$(PS5_HOST):$(FTP_PORT)/ >/dev/null 2>&1
 	curl -sS --ftp-create-dirs -T $(ELF) ftp://$(PS5_HOST):$(FTP_PORT)$(DEV_ELF)
 	curl -sS -N -m 30 "http://$(PS5_HOST):$(WEBSRV)/hbldr?path=$(DEV_ELF)&cwd=/data/pico8&pipe=1" || true
@@ -107,7 +109,7 @@ app: $(SDL2)/lib/libSDL2.a $(CURL)/lib/libcurl.a
 APP_FILES := eboot.bin sandbox-elevator.elf sce_module/libc.prx \
              sce_sys/param.json sce_sys/icon0.png
 
-install-app: app ../deps/cacert.pem
+install-app: app ../deps/cacert.pem need-host
 	-@curl -sS -Q "DELE /data/pico8/loader.log" $(FTP)/ >/dev/null 2>&1
 	for f in $(APP_FILES); do \
 	    curl -sS --ftp-create-dirs -T $(APP_DIR)/$$f $(FTP)$(HB_DIR)/$$f || exit 1; \
@@ -145,10 +147,10 @@ release: ../deps/cacert.pem
 	cd ../release && zip -qr $(REL_NAME).zip $(REL_NAME)
 	@echo "pacote: release/$(REL_NAME).zip"
 
-log:
+log: need-host
 	@curl -sS ftp://$(PS5_HOST):$(FTP_PORT)/data/pico8/loader.log
 
 clean:
-	rm -f $(ELF)
+	rm -rf $(ELF) $(APP)/build
 
-.PHONY: all upload-data deploy websrv run app install-app release log clean
+.PHONY: all need-host upload-data websrv run app install-app release log clean

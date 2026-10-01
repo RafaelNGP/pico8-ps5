@@ -8,8 +8,8 @@
  *
  * A pasta do app eh /app0 no sandbox, mas depois da elevacao o processo
  * enxerga a raiz real, onde ela aparece em /mnt/sandbox/<titleId>_000/app0.
- * O /data/homebrew/<titleId> cobre o local padrao do ShadowMountPlus, e o
- * /data/pico8 eh o layout antigo (e o unico no modo payload). Saves, log e
+ * O /data/homebrew/<titleId> cobre o local padrao do ShadowMountPlus (e o
+ * modo payload, `make run`), e o /data/pico8 eh o layout antigo. Saves, log e
  * HOME ficam sempre em P8_DIR, fora da pasta do app, para uma atualizacao
  * nao apagar nada.
  */
@@ -73,19 +73,25 @@ static int exists(const char *path)
     return access(path, R_OK) == 0;
 }
 
-/* Procura <raiz>/<sub> nas pastas do app e depois em P8_DIR/<antigo>. */
+/* Procura <raiz>/<sub> nas pastas do app e depois em P8_DIR/<antigo>.
+ * Os caminhos tentados so vao para o log se nenhum existir. */
 static int find(char *out, size_t len, const char *sub, const char *legacy)
 {
-    for (int i = 0; app_roots[i]; i++) {
+    int i;
+
+    for (i = 0; app_roots[i]; i++) {
         snprintf(out, len, "%s/%s", app_roots[i], sub);
         if (exists(out))
             return 0;
-        lg("  nao achei %s", out);
     }
     snprintf(out, len, "%s/%s", P8_DIR, legacy);
     if (exists(out))
         return 0;
-    lg("  nao achei %s", out);
+
+    lg("nao achei %s; procurei em:", sub);
+    for (i = 0; app_roots[i]; i++)
+        lg("  %s/%s", app_roots[i], sub);
+    lg("  %s/%s", P8_DIR, legacy);
     return -1;
 }
 

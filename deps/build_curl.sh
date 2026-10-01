@@ -11,7 +11,8 @@ here=$(cd "$(dirname "$0")" && pwd)
 out=$here/curl
 mbedtls_ver=3.6.4
 curl_ver=8.18.0
-# Caminho do pacote de CAs no PS5 (enviado por `make upload-data`).
+# Padrao embutido na libcurl (layout antigo). Em runtime, o loader aponta
+# o CURLOPT_CAINFO para o cacert.pem da pasta do app (pico8_loader/paths.c).
 ca_bundle=/data/pico8/cacert.pem
 
 cd "$here"
