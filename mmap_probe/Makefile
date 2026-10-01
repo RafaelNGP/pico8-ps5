@@ -5,7 +5,8 @@
 #   make                             # gera mmap_probe.elf
 #   make test                        # envia pro elfldr na porta 9021
 
-PS5_HOST ?= <PS5_IP>
+# IP do PS5: make test PS5_HOST=<ip> (ou no ambiente).
+PS5_HOST ?=
 PS5_PORT ?= 9021
 
 ifdef PS5_PAYLOAD_SDK
@@ -24,6 +25,7 @@ $(ELF): main.c
 	$(CC) $(CFLAGS) -o $@ $^
 
 test: $(ELF)
+	@test -n "$(PS5_HOST)" || { echo "defina PS5_HOST=<ip do PS5>" >&2; exit 1; }
 	$(PS5_DEPLOY) -h $(PS5_HOST) -p $(PS5_PORT) $^
 
 clean:

@@ -19,9 +19,8 @@ functions and never modifies the binary.
 | `paths.c` | Finds `pico8_dyn`, `pico8.dat` and `cacert.pem` inside the app folder, checks the version and tells the user (in English) what is missing. |
 | `p8_alloc.c` | Private heap (dlmalloc mspace, growing with `mmap`) for PICO-8, SDL and curl. |
 
-The same code runs in two ways: as a **native app** (`../pico8_app`, an
-`eboot.bin` with a Home icon, the normal mode) or as a ps5-payload-sdk
-**payload** launched through websrv (development).
+The loader runs as the `eboot.bin` of a native app (`../pico8_app`) with its
+own Home icon.
 
 PS5 quirks found along the way:
 
@@ -32,16 +31,15 @@ PS5 quirks found along the way:
   `0x400000`–`0x2400000` (`PROT_NONE`, which costs no memory) before any
   allocation. The real ranges then come from `pico8_dyn`'s `PT_LOAD`
   headers, so a larger future version fits without code changes.
-- Only the foreground app is shown on the TV. That's why the loader runs
-  inside the app's own `eboot.bin`. In payload mode, the hbldr of
-  [websrv](https://github.com/ps5-payload-dev/websrv) does that job by
-  opening a fake app and running the ELF inside it.
-- A background payload only gets 32 MiB of video memory, while SDL asks
-  for 64 MiB (`deps/patches/sdl2-dmem-fallback.patch`).
+- Only the foreground app is shown on the TV, so a background payload is
+  not an option: the loader has to run inside the app's own `eboot.bin`.
+- SDL asks for 64 MiB of video memory; `deps/patches/sdl2-dmem-fallback.patch`
+  retries with 32 MiB (enough for 1080p) when a process can't get 64.
 - Native TLS (`sceHttp2`) failed with `0x8095f00c` on HTTPS downloads,
   hence libcurl with mbedTLS.
 
-Quirks of running as a native app instead of a payload:
+Quirks of running inside a native app (where an ELF payload would have had
+elfldr resolve everything):
 
 - The kernel loads the eboot at `0x400000 + vaddr`, right where
   `pico8_dyn` has to go. `pico8_app/TEXT_BASE` (`0x4000000`) and
@@ -68,20 +66,12 @@ Quirks of running as a native app instead of a payload:
 
 ## Usage
 
-The normal installation is described in the [project README](../README.md):
-`make upload-data`, then `make install-app`.
+Building and installing are described in the [project README](../README.md):
+`make` builds the app, `make install-app` and `make upload-data` copy it and
+your PICO-8 files to the PS5 over FTP, and `make log` prints the log.
 
-To develop the loader as a payload, without repackaging the app:
-
-```bash
-export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
-make              # builds SDL2, libcurl and the loader (slow the first time)
-make websrv       # starts websrv (repeat after rebooting the PS5)
-make run          # uploads to /data/pico8/pico8_loader.elf and opens it via hbldr
-make log          # prints /data/pico8/loader.log
-```
-
-The PS5 IP defaults to `<PS5_IP>`; for another one, use `PS5_HOST=<ip>`.
+The targets that talk to the PS5 need its IP: pass `PS5_HOST=<ip>`, export
+it, or put `PS5_HOST := <ip>` in `pico8_loader/local.mk` (ignored by git).
 
 ## Where files live on the PS5
 
@@ -93,6 +83,5 @@ The PS5 IP defaults to `<PS5_IP>`; for another one, use `PS5_HOST=<ip>`.
   `/data/pico8`.
 - `/data/pico8/`: what PICO-8 writes (`.lexaloffle/pico-8/`, with config,
   favourites, carts and saves) and `loader.log`.
-- `/data/pico8/pico8_loader.elf`: the loader as a payload (`make run`).
 
 The `loader.log` messages themselves are still in Portuguese.

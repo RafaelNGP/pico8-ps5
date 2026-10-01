@@ -84,6 +84,7 @@ if [ -f "$app/ELEVATE" ]; then
 fi
 
 # clang-18 eh o padrao do boilerplate; o clang do sistema tambem serve.
+log=$stage/build.log
 make -C "$bp" app USE_CCACHE=0 PS5_CLANG="${PS5_CLANG:-clang}" \
     APP_SOURCE_DIR="$link/build/src" \
     APP_DEFINITIONS="$APP_DEFS" \
@@ -92,7 +93,15 @@ make -C "$bp" app USE_CCACHE=0 PS5_CLANG="${PS5_CLANG:-clang}" \
     APP_SCE_SYS="$link/build/sce_sys" \
     APP_PARAM="$link/build/sce_sys/param.json" \
     APP_ASSETS="$link/build/assets" \
-    APP_ROOT_FILES="$root_files"
+    APP_ROOT_FILES="$root_files" 2>&1 | tee "$log"
+[ "${PIPESTATUS[0]}" -eq 0 ] || exit 1
+
+# O boilerplate compila com -Wall -Wextra, mas sem -Werror. Warning no
+# codigo do app (nao no dos deps) quebra o build, como -Werror faria.
+if grep -E "apps/$(basename "$app")/build/src/.*warning:" "$log"; then
+    echo "warnings no codigo do app (acima)" >&2
+    exit 1
+fi
 
 rm -rf "$stage/$title"
 cp -r "$bp/dist/$title" "$stage/$title"

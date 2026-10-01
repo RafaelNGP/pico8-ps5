@@ -73,14 +73,7 @@ static int *sh_errno_location(void)
 }
 
 /* ------------------------------------------------------------------ */
-/* Memoria                                                             */
-
-/* O pico8 aloca pelo heap proprio (p8_alloc.c): o do sistema esgota. */
-int sceKernelAvailableDirectMemorySize(off_t, off_t, size_t, off_t *, size_t *);
-off_t sceKernelGetDirectMemorySize(void);
-
-/* ------------------------------------------------------------------ */
-/* dlopen: so a libcurl existe, emulada sobre sceHttp2 (net_curl.c) */
+/* dlopen: so a libcurl existe (a real, linkada em net_curl.c)         */
 
 /* Como no dlfcn real, dlerror() devolve NULL se nao houve erro desde a
  * ultima chamada; o pico8 checa isso depois de cada dlsym. */
@@ -113,14 +106,14 @@ static char *sh_dlerror(void)
 }
 
 /* ------------------------------------------------------------------ */
-/* stdio: printf/puts implicitos vao para o log                        */
+/* stdio: printf/puts implicitos vao para o log (p8_out)              */
 
 static int sh_printf_chk(int flag, const char *fmt, ...)
 {
     va_list ap;
     (void)flag;
     va_start(ap, fmt);
-    int r = vfprintf(p8_log, fmt, ap);
+    int r = vfprintf(p8_out, fmt, ap);
     va_end(ap);
     return r;
 }
@@ -166,12 +159,12 @@ static int sh_sscanf(const char *s, const char *fmt, ...)
 
 static int sh_puts(const char *s)
 {
-    return fprintf(p8_log, "%s\n", s);
+    return fprintf(p8_out, "%s\n", s);
 }
 
 static int sh_putchar(int c)
 {
-    return fputc(c, p8_log);
+    return fputc(c, p8_out);
 }
 
 static size_t sh_fread_chk(void *ptr, size_t ptrlen, size_t size, size_t n,
@@ -408,14 +401,8 @@ static const int32_t *ctype_upper_ptr = ctype_upper + 128;
 
 void shims_libc_init(void)
 {
-    size_t dmem_free = 0;
-    off_t dmem_start = 0;
-    sceKernelAvailableDirectMemorySize(0, sceKernelGetDirectMemorySize(), 0,
-                                       &dmem_start, &dmem_free);
-    size_t flex = 0;
-    sceKernelAvailableFlexibleMemorySize(&flex);
-    lg("[mem] direta: total %zu, maior bloco livre %zu; flexivel livre %zu",
-       (size_t)sceKernelGetDirectMemorySize(), dmem_free, flex);
+    /* malloc & cia. do pico8 vao para o heap proprio (p8_alloc.c): o da
+     * libc do sistema esgota num app. */
     p8_alloc_init();
 
     for (int i = 0; i < 384; i++) {

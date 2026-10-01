@@ -1,9 +1,9 @@
 /* pico8_loader - carrega o pico8_dyn (Linux x86-64, nao-PIE) no PS5
  *
- * Etapa 1: mapeia os segmentos nos enderecos nativos, resolve os 217
- * imports (libc via shims, SDL via stubs que so registram) e chama o
- * main do PICO-8. Tudo vai para /data/pico8/loader.log, que inclui o
- * stdout/stderr do proprio PICO-8.
+ * Mapeia os segmentos nos enderecos do proprio ELF, liga os imports
+ * (libc pelos shims de shims_libc.c, SDL direto no port PS5 do SDL2) e
+ * chama o main do PICO-8 numa thread propria. Tudo vai para
+ * /data/pico8/loader.log, inclusive o stdout/stderr do PICO-8.
  */
 
 #include <elf.h>
@@ -29,6 +29,11 @@
 #define PICO8_STACK_SIZE (32u * 1024 * 1024)
 
 FILE *p8_log;
+/* Para onde vai o stdout/stderr do pico8: o log ou, se ele nao abriu, o
+ * stdout do sistema. Nunca NULL, porque o pico8 escreve sem checar. */
+FILE *p8_out;
+/* Descritor do log para o handler de crash, que nao pode usar stdio. */
+static int log_fd = -1;
 
 /* ------------------------------------------------------------------ */
 /* Log e notificacao                                                   */
@@ -66,6 +71,37 @@ void notify(const char *fmt, ...)
     sceKernelSendNotificationRequest(0, &req, sizeof(req), 0);
 }
 
+/* Versoes para o handler de sinal. stdio trava o FILE: se o crash
+ * acontecer dentro de um fprintf no log, um lg() aqui travaria o app em vez
+ * de fecha-lo. Formata na pilha e grava com write(). */
+static void lg_raw(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static void lg_raw(const char *fmt, ...)
+{
+    char line[256];
+    va_list ap;
+
+    va_start(ap, fmt);
+    int n = vsnprintf(line, sizeof(line) - 1, fmt, ap);
+    va_end(ap);
+    if (n < 0)
+        return;
+    if (n > (int)sizeof(line) - 2)
+        n = sizeof(line) - 2;
+    line[n++] = '\n';
+    (void)write(log_fd >= 0 ? log_fd : STDERR_FILENO, line, n);
+}
+
+static void notify_raw(const char *msg)
+{
+    notify_request_t req;
+
+    bzero(&req, sizeof(req));
+    strncpy(req.message, msg, sizeof(req.message) - 1);
+    sceKernelSendNotificationRequest(0, &req, sizeof(req), 0);
+}
+
+#define CRASH_MSG "PICO-8 stopped unexpectedly.\nDetails: " P8_LOG
+
 /* Falha interna: os detalhes vao para o log; na tela, uma mensagem so. */
 void p8_fail(const char *fmt, ...)
 {
@@ -76,7 +112,7 @@ void p8_fail(const char *fmt, ...)
     vsnprintf(msg, sizeof(msg), fmt, ap);
     va_end(ap);
     lg("ERRO: %s", msg);
-    notify("PICO-8 stopped unexpectedly.\nDetails: " P8_LOG);
+    notify(CRASH_MSG);
 }
 
 /* ------------------------------------------------------------------ */
@@ -125,10 +161,10 @@ static void dump_trace(void)
     uint32_t end = p8_trace_pos;
     uint32_t n = end < TRACE_RING ? end : TRACE_RING;
 
-    lg("    ultimas %u chamadas de import (de %u), mais recente por ultimo:", n, end);
+    lg_raw("    ultimas %u chamadas de import (de %u), mais recente por ultimo:", n, end);
     for (uint32_t i = end - n; i != end; i++) {
         uint32_t idx = p8_trace_ring[i % TRACE_RING];
-        lg("      %s", idx < (uint32_t)n_traced ? trace_names[idx] : "?");
+        lg_raw("      %s", idx < (uint32_t)n_traced ? trace_names[idx] : "?");
     }
 }
 
@@ -151,40 +187,40 @@ static void on_fault(int sig, siginfo_t *si, void *uc_)
     if (!user_selectors(mc) && user_selectors(alt))
         mc = alt;
 
-    lg("*** thread %s, si_code=%d si_errno=%d si_addr=%p",
-       pthread_equal(pthread_self(), pico8_tid) ? "do pico8" : "OUTRA",
-       si->si_code, si->si_errno, si->si_addr);
-    lg("    trapno=0x%lx err=0x%lx addr=0x%lx rflags=0x%lx cs=0x%lx",
-       (unsigned long)mc->mc_trapno, (unsigned long)mc->mc_err,
-       (unsigned long)mc->mc_addr, (unsigned long)mc->mc_rflags,
-       (unsigned long)mc->mc_cs);
-    lg("    r8=0x%lx r9=0x%lx r10=0x%lx r11=0x%lx",
-       (unsigned long)mc->mc_r8, (unsigned long)mc->mc_r9,
-       (unsigned long)mc->mc_r10, (unsigned long)mc->mc_r11);
-    lg("    r12=0x%lx r13=0x%lx r14=0x%lx r15=0x%lx",
-       (unsigned long)mc->mc_r12, (unsigned long)mc->mc_r13,
-       (unsigned long)mc->mc_r14, (unsigned long)mc->mc_r15);
+    /* Primeiro o aviso na tela: se ler a pilha abaixo der outra falha,
+     * o usuario ao menos sabe o que houve. */
+    notify_raw(CRASH_MSG);
 
-    lg("*** CRASH sinal %d addr=%p rip=0x%lx rsp=0x%lx", sig, si->si_addr,
-       (unsigned long)mc->mc_rip, (unsigned long)mc->mc_rsp);
-    lg("    rax=0x%lx rbx=0x%lx rcx=0x%lx rdx=0x%lx",
-       (unsigned long)mc->mc_rax, (unsigned long)mc->mc_rbx,
-       (unsigned long)mc->mc_rcx, (unsigned long)mc->mc_rdx);
-    lg("    rdi=0x%lx rsi=0x%lx rbp=0x%lx",
-       (unsigned long)mc->mc_rdi, (unsigned long)mc->mc_rsi,
-       (unsigned long)mc->mc_rbp);
-
-    /* Os primeiros enderecos de retorno na pilha ajudam a achar quem
-     * chamou (o pico8_dyn nao usa frame pointer em tudo). */
-    /* Enderecos de retorno: pico8 (fixo) ou loader (o log mostra a base
-     * do loader para converter em offset do ELF). */
+    lg_raw("*** CRASH sinal %d na thread %s, si_code=%d si_addr=%p", sig,
+           pthread_equal(pthread_self(), pico8_tid) ? "do pico8" : "OUTRA",
+           si->si_code, si->si_addr);
+    lg_raw("    rip=0x%lx rsp=0x%lx rbp=0x%lx rflags=0x%lx",
+           (unsigned long)mc->mc_rip, (unsigned long)mc->mc_rsp,
+           (unsigned long)mc->mc_rbp, (unsigned long)mc->mc_rflags);
+    lg_raw("    trapno=0x%lx err=0x%lx addr=0x%lx cs=0x%lx",
+           (unsigned long)mc->mc_trapno, (unsigned long)mc->mc_err,
+           (unsigned long)mc->mc_addr, (unsigned long)mc->mc_cs);
+    lg_raw("    rax=0x%lx rbx=0x%lx rcx=0x%lx rdx=0x%lx",
+           (unsigned long)mc->mc_rax, (unsigned long)mc->mc_rbx,
+           (unsigned long)mc->mc_rcx, (unsigned long)mc->mc_rdx);
+    lg_raw("    rdi=0x%lx rsi=0x%lx r8=0x%lx r9=0x%lx",
+           (unsigned long)mc->mc_rdi, (unsigned long)mc->mc_rsi,
+           (unsigned long)mc->mc_r8, (unsigned long)mc->mc_r9);
+    lg_raw("    r10=0x%lx r11=0x%lx r12=0x%lx r13=0x%lx",
+           (unsigned long)mc->mc_r10, (unsigned long)mc->mc_r11,
+           (unsigned long)mc->mc_r12, (unsigned long)mc->mc_r13);
+    lg_raw("    r14=0x%lx r15=0x%lx", (unsigned long)mc->mc_r14,
+           (unsigned long)mc->mc_r15);
     dump_trace();
+
+    /* Enderecos de retorno na pilha: do pico8 (marcados) ou do loader (o
+     * on_fault da a base para converter em offset do ELF). Por ultimo,
+     * porque um rsp corrompido pode falhar de novo aqui. */
     uint64_t *sp = (uint64_t *)mc->mc_rsp;
-    lg("    loader: on_fault=%p", (void *)on_fault);
+    lg_raw("    loader: on_fault=%p", (void *)on_fault);
     for (int i = 0; (uint64_t)(uintptr_t)sp >= 0x10000 && i < 24; i++)
-        lg("    pilha[%2d] = 0x%lx%s", i, (unsigned long)sp[i],
-           sp[i] >= text_lo && sp[i] < text_hi ? " (pico8 text)" : "");
-    notify("PICO-8 stopped unexpectedly.\nDetails: " P8_LOG);
+        lg_raw("    pilha[%2d] = 0x%lx%s", i, (unsigned long)sp[i],
+               sp[i] >= text_lo && sp[i] < text_hi ? " (pico8 text)" : "");
     _exit(128 + sig);
 }
 
@@ -378,6 +414,12 @@ static int load_segments(int fd)
     return 0;
 }
 
+/* Construtores do pico8_dyn, para quando o _start nao traz o init. */
+typedef void (*ctor_fn)(int, char **, char **);
+static uint64_t dt_init;
+static ctor_fn *preinit_array, *init_array;
+static size_t n_preinit, n_init;
+
 static int relocate(void)
 {
     Elf64_Dyn *dyn = NULL;
@@ -403,6 +445,15 @@ static int relocate(void)
         case DT_RELASZ:   relsz[0] = dyn->d_un.d_val; break;
         case DT_JMPREL:   rel[1] = (void *)(uintptr_t)dyn->d_un.d_ptr; break;
         case DT_PLTRELSZ: relsz[1] = dyn->d_un.d_val; break;
+        case DT_INIT:     dt_init = dyn->d_un.d_ptr; break;
+        case DT_INIT_ARRAY:
+            init_array = (ctor_fn *)(uintptr_t)dyn->d_un.d_ptr; break;
+        case DT_INIT_ARRAYSZ:
+            n_init = dyn->d_un.d_val / sizeof(ctor_fn); break;
+        case DT_PREINIT_ARRAY:
+            preinit_array = (ctor_fn *)(uintptr_t)dyn->d_un.d_ptr; break;
+        case DT_PREINIT_ARRAYSZ:
+            n_preinit = dyn->d_un.d_val / sizeof(ctor_fn); break;
         }
     }
 
@@ -417,12 +468,12 @@ static int relocate(void)
 
             if (type == R_X86_64_COPY) {
                 /* stdin/stdout/stderr: o pico8 le o FILE* direto da
-                 * variavel. stdout/stderr vao para o log. */
+                 * variavel. stdout/stderr vao para o log (p8_out). */
                 if (strcmp(name, "stdin") == 0)
                     *where = (uint64_t)(uintptr_t)stdin;
                 else if (strcmp(name, "stdout") == 0 ||
                          strcmp(name, "stderr") == 0)
-                    *where = (uint64_t)(uintptr_t)p8_log;
+                    *where = (uint64_t)(uintptr_t)p8_out;
                 else {
                     lg("R_X86_64_COPY desconhecido: %s", name);
                     return -1;
@@ -491,19 +542,42 @@ static int check_writable(uint64_t addr)
     return ok ? 0 : -1;
 }
 
-/* Extrai main/init do _start padrao do glibc:
- *   mov $fini,%r8 ; mov $init,%rcx ; mov $main,%rdi ; call *libc_start_main */
+/* Extrai main e init do _start do glibc. Ate a 2.33 (a 0.2.7):
+ *   mov $fini,%r8 ; mov $init,%rcx ; mov $main,%rdi ; call *libc_start_main
+ * A partir da 2.34, init e fini vem zerados (xor %ecx,%ecx) e os
+ * construtores ficam so no DT_INIT_ARRAY; o main pode vir por
+ * lea main(%rip),%rdi. Sem init, o loader roda os construtores. */
 static int parse_start(uint64_t entry, uint64_t *main_addr, uint64_t *init_addr)
 {
     const uint8_t *p = (const uint8_t *)(uintptr_t)entry;
 
-    for (int i = 0; i < 32; i++) {
-        if (p[i] == 0x48 && p[i + 1] == 0xC7 && p[i + 2] == 0xC1)
+    /* Para no call *__libc_start_main(%rip): depois dele vem outra funcao. */
+    for (int i = 0; i < 64 && !(p[i] == 0xFF && p[i + 1] == 0x15); i++) {
+        if (p[i] != 0x48)
+            continue;
+        if (p[i + 1] == 0xC7 && p[i + 2] == 0xC1)          /* mov $imm32,%rcx */
             *init_addr = *(const uint32_t *)(p + i + 3);
-        if (p[i] == 0x48 && p[i + 1] == 0xC7 && p[i + 2] == 0xC7)
+        if (p[i + 1] == 0xC7 && p[i + 2] == 0xC7)          /* mov $imm32,%rdi */
             *main_addr = *(const uint32_t *)(p + i + 3);
+        if (p[i + 1] == 0x8D && p[i + 2] == 0x3D)          /* lea rel32(%rip),%rdi */
+            *main_addr = entry + i + 7 + *(const int32_t *)(p + i + 3);
     }
-    return (*main_addr && *init_addr) ? 0 : -1;
+    return *main_addr ? 0 : -1;
+}
+
+/* O que o ld.so faria antes do main: DT_PREINIT_ARRAY, DT_INIT e
+ * DT_INIT_ARRAY, nessa ordem. */
+static void run_ctors(int argc, char **argv, char **envp)
+{
+    lg("construtores: %zu preinit, init=0x%lx, %zu init_array", n_preinit,
+       (unsigned long)dt_init, n_init);
+    for (size_t i = 0; i < n_preinit; i++)
+        preinit_array[i](argc, argv, envp);
+    if (dt_init)
+        ((void (*)(void))(uintptr_t)dt_init)();
+    for (size_t i = 0; i < n_init; i++)
+        if ((uintptr_t)init_array[i] > 1)   /* 0 e -1 sao marcadores */
+            init_array[i](argc, argv, envp);
 }
 
 /* ------------------------------------------------------------------ */
@@ -517,10 +591,8 @@ static char *g_argv[] = { p8_bin, "-splore", NULL };
 
 extern char **environ;
 
-#ifdef P8_APP
 int p8_app_elevate(void);          /* pico8_app/src/app_glue.cpp */
 void p8_app_check_imports(void);   /* pico8_app/src/app_check.c */
-#endif
 
 static void *pico8_thread(void *arg)
 {
@@ -528,8 +600,12 @@ static void *pico8_thread(void *arg)
     pico8_tid = pthread_self();
     install_fault_handler();
 
-    lg("chamando init (0x%lx)...", (unsigned long)g_init);
-    ((init_fn)(uintptr_t)g_init)(2, g_argv, environ);
+    if (g_init) {
+        lg("chamando init (0x%lx)...", (unsigned long)g_init);
+        ((init_fn)(uintptr_t)g_init)(2, g_argv, environ);
+    } else {
+        run_ctors(2, g_argv, environ);
+    }
 
     lg("chamando main (0x%lx)...", (unsigned long)g_main);
     int r = ((main_fn)(uintptr_t)g_main)(2, g_argv, environ);
@@ -551,24 +627,31 @@ int main(void)
     int map_errno = window == MAP_FAILED ? errno : 0;
     sceKernelAvailableFlexibleMemorySize(&flex_after);
 
-#ifdef P8_APP
-    /* Como eboot.bin, o sandbox esconde /data ate a elevacao. Vem depois
-     * das faixas fixas porque o helper aloca memoria. */
+    /* O app nasce no sandbox, que esconde /data ate a elevacao. Vem
+     * depois da janela porque o helper aloca memoria. */
     int elev = p8_app_elevate();
-#endif
 
     mkdir(P8_DIR, 0777);
     p8_log = fopen(P8_LOG, "w");
     /* Sem buffer: o stdout/stderr do pico8 tambem vem para ca, e uma
      * linha sem '\n' se perderia num crash. */
-    if (p8_log)
+    if (p8_log) {
         setvbuf(p8_log, NULL, _IONBF, 0);
+        log_fd = fileno(p8_log);
+    }
+    p8_out = p8_log ? p8_log : stdout;
 
     lg("==== pico8_loader ====");
-#ifdef P8_APP
-    lg("app nativo, elevacao status=%d (0=ok)", elev);
+    lg("elevacao status=%d (0=ok)", elev);
+    if (elev != 0) {
+        /* Sem a elevacao nao ha /data: nem log, nem saves. A causa quase
+         * sempre eh o elfldr fora do ar. */
+        notify("PICO-8: could not get access to /data.\n"
+               "Make sure elfldr is running (port 9021), as ProsperoEden "
+               "also requires.");
+        return 1;
+    }
     p8_app_check_imports();
-#endif
 
     lg("janela 0x%lx-0x%lx: %p (errno=%d), flexivel livre %zu -> %zu",
        (unsigned long)P8_WINDOW_LO, (unsigned long)P8_WINDOW_HI, window,

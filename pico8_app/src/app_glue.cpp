@@ -11,6 +11,11 @@
 #include <cstdlib>
 #include <cstring>
 
+extern "C"
+{
+#include "loader.h"
+}
+
 extern "C" int p8_app_elevate(void)
 {
     return static_cast<int>(elevation::request(elevation::Capability::filesystem));
@@ -104,21 +109,29 @@ extern "C" int sceImeDialogTerm(void)
 /* O getcwd da libSceLibcInternal chama por dentro um modulo que o app nao
  * carrega e salta para um placeholder (crash visto logo apos o SDL_Init).
  * O loader faz chdir(P8_DIR) antes do pico8, que nao importa chdir: o
- * diretorio atual eh sempre esse. */
+ * diretorio atual eh sempre esse. Com buf NULL e size 0, aloca o
+ * necessario (extensao do glibc que o POSIX permite). */
 extern "C" char *getcwd(char *buf, unsigned long size)
 {
-    static const char cwd[] = "/data/pico8";
+    static const char cwd[] = P8_DIR;
 
-    if (!buf)
-    {
-        size = size ? size : sizeof(cwd);
-        buf = static_cast<char *>(std::malloc(size));
-        if (!buf)
-            return nullptr;
-    }
-    if (size < sizeof(cwd))
+    if (size && size < sizeof(cwd))
     {
         errno = ERANGE;
+        return nullptr;
+    }
+    if (!buf)
+    {
+        buf = static_cast<char *>(std::malloc(size ? size : sizeof(cwd)));
+        if (!buf)
+        {
+            errno = ENOMEM;
+            return nullptr;
+        }
+    }
+    else if (!size)
+    {
+        errno = EINVAL;
         return nullptr;
     }
     std::memcpy(buf, cwd, sizeof(cwd));

@@ -43,8 +43,10 @@ typedef struct {
 extern const shim_t shims_libc[];
 extern const shim_t shims_sdl[];
 
-/* FILE* do log; o stdout/stderr do pico8 tambem apontam pra ca. */
+/* FILE* do log (NULL se nao abriu) e a saida do stdout/stderr do pico8:
+ * o log ou, sem ele, o stdout do sistema. p8_out nunca eh NULL. */
 extern FILE *p8_log;
+extern FILE *p8_out;
 
 void lg(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 void notify(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
