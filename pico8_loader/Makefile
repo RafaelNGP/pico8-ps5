@@ -99,7 +99,7 @@ install-app: app ../deps/cacert.pem need-host
 	curl -sS -T ../deps/cacert.pem $(FTP)$(HB_DIR)/cacert.pem
 
 # Os arquivos do PICO-8 do usuario ficam dentro da pasta do app
-# (pico8_loader/paths.c), como os de firmware no ProsperoEden.
+# (pico8_loader/paths.c).
 upload-data: need-host
 	curl -sS --ftp-create-dirs -T $(PICO8_DIR)/pico8_dyn $(FTP)$(HB_DIR)/pico8/
 	curl -sS --ftp-create-dirs -T $(PICO8_DIR)/pico8.dat $(FTP)$(HB_DIR)/pico8/

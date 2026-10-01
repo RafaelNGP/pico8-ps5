@@ -3,7 +3,7 @@
  * Para o PICO-8 ser um app autonomo (so kstuff + ShadowMountPlus), o
  * loader tem que rodar no proprio processo do eboot.bin. Este probe
  * responde, no console, o que isso exige:
- *   1. elevacao de sandbox pelo elfldr local (mecanismo do ProsperoEden);
+ *   1. elevacao de sandbox pelo elfldr local;
  *   2. leitura de /data/pico8/pico8_dyn;
  *   3. faixa fixa 0x400000/0x794000 livre no processo do app;
  *   4. TEXT RW -> RX e execucao de codigo ali; DATA continua gravavel.

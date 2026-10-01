@@ -12,15 +12,14 @@ build, bought at <https://www.lexaloffle.com/pico-8.php>; tested with 0.2.7).
 
 ## Installation
 
-No building and no commands: you copy one folder, the same way you install
-ProsperoEden.
+No building and no commands: you copy one folder to the PS5.
 
 **Requirements on the PS5** (tested on a single console):
 
 - kstuff and ShadowMountPlus running;
 - elfldr listening on `127.0.0.1:9021`, which usually comes with
   kstuff/Payload Manager. The app uses elfldr to get access to `/data`
-  (sandbox elevation, the same mechanism ProsperoEden uses);
+  (sandbox elevation);
 - a way to copy files to the PS5, such as an FTP server.
 
 **Steps**, with the `pico8-ps5-<version>.zip` package:

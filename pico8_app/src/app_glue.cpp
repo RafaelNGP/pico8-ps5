@@ -1,8 +1,8 @@
 /* pico8_app - ganchos do pico8_loader quando ele roda como eboot.bin
  *
  * Como app nativo, o loader nasce no sandbox e nao enxerga /data. O
- * helper de elevacao do boilerplate (via elfldr local, como no
- * ProsperoEden) libera o filesystem antes de abrir pico8_dyn.
+ * helper de elevacao do boilerplate (via elfldr local) libera o
+ * filesystem antes de abrir pico8_dyn.
  */
 
 #include "elevation.hpp"

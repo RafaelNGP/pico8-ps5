@@ -3,7 +3,7 @@
 A minimal native app (`eboot.bin`) that answered whether `pico8_loader` can
 run inside an app's own process instead of as a payload. It checks:
 
-1. sandbox elevation through the local elfldr (the ProsperoEden mechanism);
+1. sandbox elevation through the local elfldr;
 2. reading `/data/pico8/pico8_dyn`;
 3. whether the fixed range `0x400000`–`0xb70000` is free in the app process
    (it lists the address space with `sceKernelVirtualQuery` first);

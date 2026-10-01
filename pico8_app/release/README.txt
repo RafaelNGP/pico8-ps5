@@ -16,8 +16,7 @@ Requirements on the PS5
 -----------------------
 - kstuff and ShadowMountPlus running.
 - elfldr listening on 127.0.0.1:9021 (it usually comes with kstuff or
-  Payload Manager). The app uses elfldr to get access to /data, the same
-  mechanism ProsperoEden uses.
+  Payload Manager). The app uses elfldr to get access to /data.
 - A way to copy files to the PS5 (e.g. an FTP server).
 
 
