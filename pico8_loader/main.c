@@ -591,10 +591,8 @@ static char *g_argv[] = { p8_bin, "-splore", NULL };
 
 extern char **environ;
 
-#ifdef P8_APP
 int p8_app_elevate(void);          /* pico8_app/src/app_glue.cpp */
 void p8_app_check_imports(void);   /* pico8_app/src/app_check.c */
-#endif
 
 static void *pico8_thread(void *arg)
 {
@@ -629,11 +627,9 @@ int main(void)
     int map_errno = window == MAP_FAILED ? errno : 0;
     sceKernelAvailableFlexibleMemorySize(&flex_after);
 
-#ifdef P8_APP
-    /* Como eboot.bin, o sandbox esconde /data ate a elevacao. Vem depois
-     * das faixas fixas porque o helper aloca memoria. */
+    /* O app nasce no sandbox, que esconde /data ate a elevacao. Vem
+     * depois da janela porque o helper aloca memoria. */
     int elev = p8_app_elevate();
-#endif
 
     mkdir(P8_DIR, 0777);
     p8_log = fopen(P8_LOG, "w");
@@ -646,8 +642,7 @@ int main(void)
     p8_out = p8_log ? p8_log : stdout;
 
     lg("==== pico8_loader ====");
-#ifdef P8_APP
-    lg("app nativo, elevacao status=%d (0=ok)", elev);
+    lg("elevacao status=%d (0=ok)", elev);
     if (elev != 0) {
         /* Sem a elevacao nao ha /data: nem log, nem saves. A causa quase
          * sempre eh o elfldr fora do ar. */
@@ -657,7 +652,6 @@ int main(void)
         return 1;
     }
     p8_app_check_imports();
-#endif
 
     lg("janela 0x%lx-0x%lx: %p (errno=%d), flexivel livre %zu -> %zu",
        (unsigned long)P8_WINDOW_LO, (unsigned long)P8_WINDOW_HI, window,

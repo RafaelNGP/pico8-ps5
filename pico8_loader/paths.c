@@ -8,8 +8,8 @@
  *
  * A pasta do app eh /app0 no sandbox, mas depois da elevacao o processo
  * enxerga a raiz real, onde ela aparece em /mnt/sandbox/<titleId>_000/app0.
- * O /data/homebrew/<titleId> cobre o local padrao do ShadowMountPlus (e o
- * modo payload, `make run`), e o /data/pico8 eh o layout antigo. Saves, log e
+ * O /data/homebrew/<titleId> cobre o local padrao do ShadowMountPlus, e o
+ * /data/pico8 eh o layout antigo. Saves, log e
  * HOME ficam sempre em P8_DIR, fora da pasta do app, para uma atualizacao
  * nao apagar nada.
  */
@@ -24,11 +24,9 @@ char p8_bin[256];
 char p8_cacert[256];
 
 static const char *const app_roots[] = {
-#ifdef P8_APP
     "/app0",
     "/mnt/sandbox/" P8_TITLE_ID "_000/app0",
-#endif
-    "/data/homebrew/" P8_TITLE_ID,   /* tambem no modo payload (make run) */
+    "/data/homebrew/" P8_TITLE_ID,
     NULL,
 };
 
