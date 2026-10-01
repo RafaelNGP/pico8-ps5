@@ -8,9 +8,9 @@
 #   TEXT_BASE  vaddr da imagem (ex.: 0x1000000), para liberar 0x400000;
 #   build.env  APP_DEFS, APP_INCS, APP_LIBS (caminhos relativos a pasta)
 #              e SDK_LIBC_OBJS (objetos avulsos da libc.a do SDK);
-#   ELEVATE    inclui o helper de elevacao do boilerplate (o mesmo
-#              mecanismo do ProsperoEden): elevation.cpp entra no build e
-#              o sandbox-elevator.elf, travado no titleId do app, vai
+#   ELEVATE    inclui o helper de elevacao do boilerplate (via elfldr
+#              local): elevation.cpp entra no build e o
+#              sandbox-elevator.elf, travado no titleId do app, vai
 #              para /app0.
 # Saida em <pasta>/build/<TITLE_ID>/.
 set -euo pipefail

@@ -647,8 +647,7 @@ int main(void)
         /* Sem a elevacao nao ha /data: nem log, nem saves. A causa quase
          * sempre eh o elfldr fora do ar. */
         notify("PICO-8: could not get access to /data.\n"
-               "Make sure elfldr is running (port 9021), as ProsperoEden "
-               "also requires.");
+               "Make sure elfldr is running (port 9021).");
         return 1;
     }
     p8_app_check_imports();

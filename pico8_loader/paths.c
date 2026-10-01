@@ -1,8 +1,8 @@
 /* paths - onde ficam os arquivos do PICO-8 e o cacert.pem
  *
- * Como app nativo, tudo que o usuario instala fica dentro da pasta do app,
- * como no ProsperoEden: o pacote traz <titleId>/cacert.pem e o usuario poe
- * o pico8_dyn e o pico8.dat em <titleId>/pico8/. O pico8 acha o pico8.dat ao lado
+ * Como app nativo, tudo que o usuario instala fica dentro da pasta do app:
+ * o pacote traz <titleId>/cacert.pem e o usuario poe o pico8_dyn e o
+ * pico8.dat em <titleId>/pico8/. O pico8 acha o pico8.dat ao lado
  * do executavel (codo_prefix_with_program_path sobre /proc/self/exe), entao
  * basta apontar p8_bin para a pasta certa.
  *
