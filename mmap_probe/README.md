@@ -1,31 +1,35 @@
-# mmap_probe — teste de viabilidade do loader PICO-8 no PS5
+# mmap_probe: feasibility test for the PICO-8 loader on PS5
 
-Este é o **primeiro passo** do projeto. Ele não carrega o PICO-8.
-Responde uma única pergunta que decide a arquitetura de todo o resto:
+This was the **first step** of the project. It doesn't load PICO-8. It
+answers a single question that decided the architecture of everything
+else:
 
-> O processo de homebrew no PS5 consegue reservar a faixa de endereços
-> fixos que o `pico8_dyn` exige (`0x400000`–`0xb6f000`)?
+> Can a homebrew process on the PS5 reserve the fixed address range that
+> `pico8_dyn` requires (`0x400000`–`0xb70000`) and make that memory
+> executable?
 
-O `pico8_dyn` é um ELF **não-PIE**, então precisa ser carregado nesses
-endereços exatos. Se o PS5 liberar a faixa, o loader usa os endereços
-nativos e o trabalho é só resolver imports. Se não liberar, o plano B é
-linkar o próprio loader num endereço alto para desocupar a faixa.
+`pico8_dyn` is a **non-PIE** ELF, so it has to be loaded at those exact
+addresses. If the PS5 frees the range, the loader uses the native
+addresses and the remaining work is resolving imports. If it doesn't, the
+fallback is to link the loader itself at a high address to free the range.
 
-## Pré-requisitos
+Result on 2026-10-01: **VIABLE**. The range was free and executable, so the
+loader uses the native addresses.
 
-- Um PC Linux (seu Nobara serve) com o **ps5-payload-sdk** instalado:
+## Requirements
+
+- A Linux PC with **ps5-payload-sdk** installed. On Fedora/Nobara,
+  `llvm-config` comes from the `llvm-devel` package; without it the SDK's
+  `Makefile.inc` leaves `LLVM_CONFIG` empty and the compiler becomes `/clang`:
   ```bash
-  git clone https://github.com/ps5-payload-dev/sdk ps5-payload-sdk
-  cd ps5-payload-sdk
-  sudo apt-get install build-essential cmake clang clang-15 lld lld-15   # ou os equivalentes do Fedora/Nobara
-  make
-  sudo make DESTDIR=/opt/ps5-payload-sdk install
+  sudo dnf install clang lld llvm llvm-devel make cmake python3-pyelftools
+  cd ~/pico-8/ps5-payload-sdk
+  make LLVM_CONFIG=/usr/bin/llvm-config
+  sudo make LLVM_CONFIG=/usr/bin/llvm-config DESTDIR=/opt/ps5-payload-sdk install
   export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
   ```
-- Um **PS5 já jailbroken** com um ELF loader ativo na porta **9021**
-  (Relapse + etaHEN/elfldr, firmware ≤ 13.60).
-- `netcat` (`nc`) no PC.
-- PS5 e PC na **mesma rede**.
+- A **jailbroken PS5** with an ELF loader listening on port **9021**.
+- The PS5 and the PC on the **same network**.
 
 ## Build
 
@@ -35,49 +39,48 @@ cd mmap_probe
 make
 ```
 
-Isso gera `mmap_probe.elf`.
+This produces `mmap_probe.elf`.
 
-## Rodar no PS5
+## Running it on the PS5
 
-1. No PS5 já jailbroken, deixe o ELF loader escutando na porta 9021
-   (é o estado normal depois de rodar o Relapse + elfldr).
-2. Descubra o IP do PS5 (Ajustes → Rede → Status da conexão).
-3. No PC:
+1. On the jailbroken PS5, keep the ELF loader listening on port 9021.
+2. The PS5 IP defaults to `<PS5_IP>` in the Makefile; for another one,
+   use `make test PS5_HOST=<ip>`.
+3. On the PC:
    ```bash
-   make test PS5_HOST=192.168.x.x
+   make test
    ```
-   ou manualmente:
+   or by hand (Fedora's `nc` is `ncat`, which doesn't accept `-q0`):
    ```bash
-   nc -q0 192.168.x.x 9021 < mmap_probe.elf
+   ncat --send-only <PS5_IP> 9021 < mmap_probe.elf
    ```
 
-## Lendo o resultado
+## Reading the result
 
-O probe reporta de duas formas:
+The probe reports in two ways:
 
-- **Toast na tela do PS5** (via `notify`): aparece uma notificação no
-  canto. A última linha é a que importa:
-  - `RESULTADO: VIAVEL` → a faixa está livre. Seguimos com endereços nativos.
-  - `RESULTADO: BLOQUEADO` → precisamos do plano B (relink alto).
-- **Log no PC**: se você tiver o `klog`/stdout do SDK capturando a saída
-  (ex. `nc -l` na porta de log, conforme seu setup do etaHEN), verá as
-  linhas `[mmap_probe] ...` com cada segmento testado e o `errno` em
-  caso de falha.
+- **A notification on the PS5 screen** (via `notify`). The last line is the
+  one that matters:
+  - `RESULTADO: VIAVEL` (viable): the range is free and executable, so the
+    loader can use the native addresses.
+  - `RESULTADO: PARCIAL` (partial): the range is free, but the kernel denies
+    `PROT_EXEC` on anonymous memory, or the code hung (see the last `EXEC:`
+    message).
+  - `RESULTADO: BLOQUEADO` (blocked): the fallback (high relink) is needed.
+- **The log on the PC**: if the SDK's klog/stdout output is being captured,
+  you'll see `[mmap_probe] ...` lines for each segment tested, with
+  `errno` on failure.
 
-Me mande o texto do resultado (foto do toast ou o log) e eu decido o
-próximo passo:
-- **VIAVEL** → escrevo o esqueleto do loader de ELF + a tabela de shims
-  dos 217 imports.
-- **BLOQUEADO** → ajusto a estratégia de carga antes de qualquer loader.
+## What the probe does, in detail
 
-## O que o probe faz, em detalhe
+1. `FAIXA 0x400000-0xb70000`: reserves TEXT+DATA+BSS at once (~7.5 MB,
+   aligned to 16 KiB pages) and writes and reads at both ends.
+2. `EXEC`: copies `mov eax, 42; ret` to the start of the range, calls
+   `mprotect(R+X)` and calls it. Without this, having the range is useless.
+3. If the whole range fails, it tests `TEXT 0x400000` and `DATA 0x794000`
+   separately to show which part is taken.
 
-1. `TEXT 0x400000` — tenta reservar só o segmento de código (~1,6 MB),
-   escreve e lê de volta para provar que a página é utilizável.
-2. `DATA 0x795000` — o mesmo para o segmento de dados+BSS (~3,9 MB).
-3. `FAIXA INTEIRA` — reserva os dois de uma vez (~7,5 MB), que é o que o
-   loader real fará antes de copiar os segmentos do `pico8_dyn`.
-
-Cada `mmap` usa `MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE`. Se o kernel
-devolver um endereço diferente do pedido, o probe trata como falha de
-propósito, para não mascarar o resultado.
+The `mmap` uses `MAP_FIXED | MAP_EXCL`: on FreeBSD, `MAP_FIXED` alone
+silently replaces any existing mapping, which would give a false "OK" (and
+could crash the payload itself). If the kernel doesn't accept `MAP_EXCL`,
+it falls back to an `mmap` with only a hint, which never overwrites.

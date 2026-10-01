@@ -1,2 +1,23 @@
 *.o
 *.elf
+
+# Dependencias baixadas/compiladas por deps/build_*.sh
+deps/SDL/
+deps/sdl2/
+deps/curl/
+deps/curl-*/
+deps/mbedtls-*/
+deps/*.tar.*
+deps/cacert.pem
+deps/*.log
+
+# Binarios de terceiros baixados (websrv)
+tools/
+
+# Apps nativos (build local)
+pico8_app/build/
+app_probe/build/
+deps/boilerplate/
+
+# Pacotes gerados por make release
+/release/

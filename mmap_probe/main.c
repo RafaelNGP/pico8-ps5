@@ -5,95 +5,149 @@
  *   LOAD  0x0000000000795cf0  RW   (~3.9 MB em memoria com BSS)
  * Faixa total aproximada: 0x400000 .. 0xb6f000  (~7.5 MB)
  *
- * Este payload NAO carrega o PICO-8. Ele so responde a pergunta que
- * decide a arquitetura do loader: o processo do homebrew consegue
- * reservar essa faixa com MAP_FIXED? Imprime o resultado via notify
- * (toast na tela) e tambem no socket de log do SDK (klog/stdout).
+ * Este payload NAO carrega o PICO-8. Ele responde as duas perguntas que
+ * decidem a arquitetura do loader:
+ *   1. O processo consegue reservar essa faixa no endereco exato?
+ *   2. Memoria anonima nessa faixa pode virar executavel (RW -> RX)?
+ * Imprime o resultado via notify (toast na tela) e tambem no stdout
+ * (klog do elfldr).
  */
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <string.h>
-#include <sys/mman.h>
+#include <strings.h>
 #include <errno.h>
-
-#include <ps5/kernel.h>   /* nao obrigatorio; presente no SDK para info extra */
+#include <sys/mman.h>
 
 /* Segmentos reais extraidos do pico8_dyn com `readelf -lW`. */
 #define SEG_TEXT_ADDR   0x0000000000400000ULL
-#define SEG_TEXT_SIZE   0x0000000000196000ULL   /* 0x195550 arredondado p/ pagina */
+#define SEG_TEXT_SIZE   0x0000000000198000ULL   /* 0x195550 arredondado p/ 16 KiB */
 
-#define SEG_DATA_ADDR   0x0000000000795000ULL   /* inicio da pagina do segmento RW */
-#define SEG_DATA_SIZE   0x00000000003d9000ULL   /* 0x3d8690 (memsz c/ BSS) arredondado */
+#define SEG_DATA_ADDR   0x0000000000794000ULL   /* 0x795cf0 alinhado p/ baixo em 16 KiB */
+#define SEG_DATA_END    0x0000000000b70000ULL   /* 0x795cf0+0x3d8690 alinhado p/ cima */
 
 #define PAGE            0x4000ULL               /* PS5 usa paginas de 16 KiB */
 
-/* notify imprime um toast no canto da tela do PS5. Prototipo exposto
- * pelo ps5-payload-sdk (libkernel_sys). */
-extern void notify(const char *fmt, ...) __attribute__((weak));
+#ifndef MAP_EXCL
+#define MAP_EXCL        0x00004000              /* FreeBSD: com MAP_FIXED, falha se ocupado */
+#endif
 
-static void say(const char *fmt, const char *a, unsigned long b, long c)
+typedef struct notify_request {
+    char useless1[45];
+    char message[3075];
+} notify_request_t;
+
+int sceKernelSendNotificationRequest(int, notify_request_t *, size_t, int);
+
+static void say(const char *fmt, ...)
 {
-    char buf[256];
-    snprintf(buf, sizeof(buf), fmt, a, b, c);
-    /* stdout vai para o log do SDK (nc na porta de klog). */
-    printf("[mmap_probe] %s\n", buf);
+    notify_request_t req;
+    va_list ap;
+
+    bzero(&req, sizeof(req));
+    va_start(ap, fmt);
+    vsnprintf(req.message, sizeof(req.message), fmt, ap);
+    va_end(ap);
+
+    printf("[mmap_probe] %s\n", req.message);
     fflush(stdout);
-    if (notify) notify("mmap_probe: %s", buf);
+    sceKernelSendNotificationRequest(0, &req, sizeof(req), 0);
 }
 
-/* Tenta reservar [addr, addr+size) exatamente. Retorna 0 em sucesso. */
-static int try_fixed(const char *name, uint64_t addr, uint64_t size)
+/* Reserva [addr, addr+size) exatamente, sem sobrescrever nada que ja
+ * esteja mapeado. MAP_FIXED sozinho no FreeBSD substitui mapeamentos
+ * existentes em silencio -- daria "OK" mesmo com a faixa ocupada (e
+ * poderia derrubar o proprio payload). Por isso MAP_FIXED|MAP_EXCL. */
+static void *reserve(const char *name, uint64_t addr, uint64_t size)
 {
-    /* MAP_FIXED sem MAP_FIXED_NOREPLACE: queremos saber se o endereco
-     * esta livre; se o kernel devolver outro endereco, falhamos de
-     * proposito para nao mascarar o resultado. Usamos ANON|PRIVATE. */
     void *want = (void *)(uintptr_t)addr;
     void *got = mmap(want, size, PROT_READ | PROT_WRITE,
-                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+                     MAP_PRIVATE | MAP_ANON | MAP_FIXED | MAP_EXCL, -1, 0);
 
+    if (got == MAP_FAILED && errno == EINVAL) {
+        /* Kernel sem MAP_EXCL: cai para hint sem MAP_FIXED, que nunca
+         * sobrescreve e so devolve `want` se a faixa estiver livre. */
+        got = mmap(want, size, PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANON, -1, 0);
+    }
     if (got == MAP_FAILED) {
-        say("%s: FALHOU mmap (errno=%lu) size=0x%lx", name, (unsigned long)errno, (long)size);
-        return -1;
+        say("%s: FALHOU mmap errno=%d size=0x%lx", name, errno,
+            (unsigned long)size);
+        return NULL;
     }
     if (got != want) {
-        say("%s: endereco DIFERENTE (quis 0x%lx, veio outro)", name, addr, 0);
+        say("%s: endereco DIFERENTE (quis 0x%lx, veio %p)", name,
+            (unsigned long)addr, got);
         munmap(got, size);
+        return NULL;
+    }
+
+    /* Prova que a memoria eh utilizavel: escreve e le nas pontas. */
+    volatile uint32_t *p = (volatile uint32_t *)got;
+    p[0] = 0xC0FFEE42u;
+    p[(size / 4) - 1] = 0x1337BEEFu;
+    if (p[0] != 0xC0FFEE42u || p[(size / 4) - 1] != 0x1337BEEFu) {
+        say("%s: mapeou mas leitura/escrita nao confere", name);
+        munmap(got, size);
+        return NULL;
+    }
+
+    say("%s: OK em 0x%lx", name, (unsigned long)addr);
+    return got;
+}
+
+/* Copia `mov eax, 42; ret` para a pagina, troca para R+X e executa.
+ * Se o kernel negar PROT_EXEC em memoria anonima, o loader precisa de
+ * outro caminho (ex.: shm JIT do sistema ou mapear via arquivo). */
+static int try_exec(void *page)
+{
+    static const uint8_t code[] = { 0xB8, 0x2A, 0x00, 0x00, 0x00, 0xC3 };
+
+    memcpy(page, code, sizeof(code));
+    if (mprotect(page, PAGE, PROT_READ | PROT_EXEC) != 0) {
+        say("EXEC: mprotect(R+X) FALHOU errno=%d", errno);
         return -1;
     }
 
-    /* Prova que a pagina e realmente utilizavel: escreve e le de volta. */
-    volatile uint32_t *p = (volatile uint32_t *)(uintptr_t)addr;
-    p[0] = 0xC0FFEE42u;
-    p[(size / 4) - 1] = 0x1337BEEFu;
-    int ok = (p[0] == 0xC0FFEE42u) && (p[(size / 4) - 1] == 0x1337BEEFu);
-
-    say("%s: OK em 0x%lx (rw verificado=%ld)", name, addr, (long)ok);
-    munmap(got, size);
-    return ok ? 0 : -1;
+    /* Se travar aqui, a ultima mensagem no log sera esta. */
+    say("EXEC: mprotect OK, chamando codigo em %p...", page);
+    int r = ((int (*)(void))page)();
+    say("EXEC: retornou %d (esperado 42)", r);
+    return r == 42 ? 0 : -1;
 }
 
 int main(void)
 {
     printf("\n==== PICO-8 PS5 mmap_probe ====\n");
-    fflush(stdout);
-    if (notify) notify("mmap_probe iniciado");
+    say("mmap_probe iniciado");
 
-    int r_text = try_fixed("TEXT 0x400000", SEG_TEXT_ADDR, SEG_TEXT_SIZE);
-    int r_data = try_fixed("DATA 0x795000", SEG_DATA_ADDR, SEG_DATA_SIZE);
+    /* Faixa inteira de uma vez, como o loader real fara antes de copiar
+     * os segmentos. Se falhar, testa cada segmento para saber qual
+     * pedaco esta ocupado. */
+    uint64_t whole_size = SEG_DATA_END - SEG_TEXT_ADDR;
+    void *whole = reserve("FAIXA 0x400000-0xb70000", SEG_TEXT_ADDR, whole_size);
+    int r_map = whole ? 0 : -1;
+    int r_exec = -1;
 
-    /* Teste combinado: reservar a faixa inteira de uma vez, como o
-     * loader real fara antes de copiar os segmentos. */
-    uint64_t whole_addr = SEG_TEXT_ADDR;
-    uint64_t whole_end  = SEG_DATA_ADDR + SEG_DATA_SIZE;
-    uint64_t whole_size = whole_end - whole_addr;
-    int r_whole = try_fixed("FAIXA INTEIRA", whole_addr, whole_size);
-
-    if (r_text == 0 && r_data == 0 && r_whole == 0) {
-        say("RESULTADO: VIAVEL - loader pode usar enderecos nativos%s", "", 0, 0);
+    if (whole) {
+        r_exec = try_exec(whole);
+        munmap(whole, whole_size);
     } else {
-        say("RESULTADO: BLOQUEADO - precisamos de plano B (relink alto)%s", "", 0, 0);
+        void *t = reserve("TEXT 0x400000", SEG_TEXT_ADDR, SEG_TEXT_SIZE);
+        void *d = reserve("DATA 0x794000", SEG_DATA_ADDR,
+                          SEG_DATA_END - SEG_DATA_ADDR);
+        if (t) munmap(t, SEG_TEXT_SIZE);
+        if (d) munmap(d, SEG_DATA_END - SEG_DATA_ADDR);
     }
+
+    if (r_map == 0 && r_exec == 0)
+        say("RESULTADO: VIAVEL - enderecos nativos + exec OK");
+    else if (r_map == 0)
+        say("RESULTADO: PARCIAL - faixa livre, mas sem exec em mem anonima");
+    else
+        say("RESULTADO: BLOQUEADO - faixa ocupada, precisa plano B (relink)");
 
     printf("==== fim ====\n");
     fflush(stdout);

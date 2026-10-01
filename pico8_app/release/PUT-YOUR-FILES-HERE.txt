@@ -1,0 +1,7 @@
+Put the two files from your PICO-8 copy (the Linux 64-bit build, from the
+zip downloaded at https://www.lexaloffle.com/pico-8.php) in this folder:
+
+    pico8_dyn
+    pico8.dat
+
+The other files in that zip are not needed.
