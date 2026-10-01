@@ -7,6 +7,9 @@
 #   make deploy       # envia o loader ao Payload Manager (segundo plano, sem video)
 #   make websrv       # baixa e inicia o websrv (necessario para `make run`)
 #   make run          # roda como app em primeiro plano via websrv (com video)
+#   make app          # gera o app da home (icone PICO-8) em ../home_app/build
+#   make install-app  # envia loader + app para /data/homebrew/PICO8 (ShadowMountPlus
+#                     # registra o icone na home em ate ~15 s)
 #   make log          # baixa /data/pico8/loader.log
 
 PS5_HOST  ?= <PS5_IP>
@@ -75,10 +78,24 @@ run: $(ELF)
 	curl -sS --ftp-create-dirs -T $(ELF) ftp://$(PS5_HOST):$(FTP_PORT)$(HB_DIR)/eboot.elf
 	curl -sS -N -m 30 "http://$(PS5_HOST):$(WEBSRV)/hbldr?path=$(HB_DIR)/eboot.elf&cwd=/data/pico8&pipe=1" || true
 
+# App da home: eboot.bin minimo que pede ao websrv para abrir o loader.
+APP_DIR := ../home_app/build/PPSA99808
+FTP     := ftp://$(PS5_HOST):$(FTP_PORT)
+
+app:
+	../deps/build_home_app.sh
+
+install-app: $(ELF) app
+	curl -sS --ftp-create-dirs -T $(ELF) $(FTP)$(HB_DIR)/eboot.elf
+	curl -sS --ftp-create-dirs -T $(APP_DIR)/eboot.bin $(FTP)$(HB_DIR)/eboot.bin
+	curl -sS --ftp-create-dirs -T $(APP_DIR)/sce_module/libc.prx $(FTP)$(HB_DIR)/sce_module/libc.prx
+	curl -sS --ftp-create-dirs -T $(APP_DIR)/sce_sys/icon0.png $(FTP)$(HB_DIR)/sce_sys/icon0.png
+	curl -sS --ftp-create-dirs -T $(APP_DIR)/sce_sys/param.json $(FTP)$(HB_DIR)/sce_sys/param.json
+
 log:
 	@curl -sS ftp://$(PS5_HOST):$(FTP_PORT)/data/pico8/loader.log
 
 clean:
 	rm -f $(ELF)
 
-.PHONY: all upload-data deploy websrv run log clean
+.PHONY: all upload-data deploy websrv run app install-app log clean

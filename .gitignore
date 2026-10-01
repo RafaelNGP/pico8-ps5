@@ -13,3 +13,7 @@ deps/*.log
 
 # Binarios de terceiros baixados (websrv)
 tools/
+
+# App da home (build local)
+home_app/build/
+deps/boilerplate/
