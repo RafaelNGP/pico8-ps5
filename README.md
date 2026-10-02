@@ -1,6 +1,12 @@
 # PICO-8 for PS5
 
-**[⬇ Download the latest release](https://github.com/RafaelNGP/pico8-ps5/releases/latest)** · [report a problem](https://github.com/RafaelNGP/pico8-ps5/issues/new?template=bug_report.yml)
+<p align="center">
+  <a href="https://github.com/RafaelNGP/pico8-ps5/releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/RafaelNGP/pico8-ps5?color=brightgreen"></a>
+  <a href="#installation"><img alt="platform: PS5 homebrew" src="https://img.shields.io/badge/platform-PS5%20homebrew-003791"></a>
+  <a href="https://www.lexaloffle.com/pico-8.php"><img alt="requires: PICO-8 0.2.7 (Linux)" src="https://img.shields.io/badge/requires-PICO--8%200.2.7%20(Linux)-83769c"></a>
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/github/license/RafaelNGP/pico8-ps5"></a>
+  <a href="https://github.com/RafaelNGP/pico8-ps5/issues/new?template=bug_report.yml"><img alt="issues: report a problem" src="https://img.shields.io/badge/issues-report%20a%20problem-ff0000"></a>
+</p>
 
 Runs the **official PICO-8 for Linux** on a jailbroken PS5 as a native app
 with its own icon on the Home screen. It boots straight into Splore and
