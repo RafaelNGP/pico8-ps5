@@ -6,8 +6,8 @@ Runs the **official PICO-8 for Linux** on a jailbroken PS5 as a native app
 with its own icon on the Home screen. It boots straight into Splore and
 works with the DualSense, with sound, and with cart downloads from the BBS.
 
-This is a "bring your own license" project: it contains and redistributes
-nothing from Lexaloffle. You need your own copy of PICO-8 (the Linux 64-bit
+This is a "bring your own license" project: PICO-8 itself is not included.
+You need your own copy of PICO-8 (the Linux 64-bit
 build, bought at <https://www.lexaloffle.com/pico-8.php>; tested with 0.2.7).
 
 **Unofficial project, not affiliated with or endorsed by Lexaloffle.**
@@ -68,10 +68,10 @@ Only needed for development. To just play, use the zip.
 
 - [ps5-payload-sdk](https://github.com/ps5-payload-dev/sdk) in `/opt/ps5-payload-sdk`;
 - `make`, `ninja`, `cmake`, `clang`/`lld`/`llvm-ar`, `git`, `curl`, `wget`,
-  `unzip`, `zip`, and `python3` with Pillow. On Fedora, `llvm-config` comes
+  `unzip`, `zip` and `python3`. On Fedora, `llvm-config` comes
   from the `llvm-devel` package;
-- your PICO-8 Linux copy in `~/pico-8/` (or in `PICO8_DIR`). Its
-  `lexaloffle-pico8.png` becomes the icon of local builds.
+- your PICO-8 Linux copy in `~/pico-8/` (or in `PICO8_DIR`), used by
+  `make upload-data`.
 
 ```bash
 cd pico8_loader
@@ -91,8 +91,8 @@ mbedTLS and the native app boilerplate, which takes a few minutes.
 `install-app` needs the app to be closed on the PS5, because FTP refuses to
 overwrite an `eboot.bin` that is in use.
 
-The `make release` zip contains the `PPSA99808` folder with a generic icon
-(nothing from Lexaloffle), a `README.txt` and the license notices.
+The `make release` zip contains the `PPSA99808` folder, a `README.txt` and
+the license notices.
 
 ## Layout
 
@@ -115,3 +115,5 @@ The app bundles code under other licenses, all compatible with the GPL-3.0:
 dlmalloc (MIT-0). Their notices ship in the release zip under `licenses/`.
 
 PICO-8 is (c) Lexaloffle Games and is not included: you need your own copy.
+The app icon (`pico8_app/sce_sys/icon0.png`) is the PICO-8 logo, (c) Lexaloffle
+Games; it is not covered by the GPL.

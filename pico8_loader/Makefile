@@ -57,7 +57,7 @@ app: $(SDL2)/lib/libSDL2.a $(CURL)/lib/libcurl.a
 	    ../deps/build_app.sh pico8_app
 
 # Pacote para quem nao vai compilar. A pasta <TITLE_ID>/ vai inteira para
-# /data/homebrew/: o app (icone generico, sem nada da Lexaloffle), o
+# /data/homebrew/: o app, o
 # cacert.pem e a subpasta pico8/ onde o usuario poe o pico8_dyn e o pico8.dat.
 VERSION    := $(shell git describe --tags --always --dirty)
 COMMIT     := $(shell git rev-parse --short HEAD)
@@ -66,7 +66,7 @@ REL_NAME   := pico8-ps5-$(VERSION)
 REL        := ../release/$(REL_NAME)
 
 release: ../deps/cacert.pem
-	APP_ICON_LOGO= $(MAKE) app
+	$(MAKE) app
 	rm -rf $(REL) $(REL).zip
 	mkdir -p $(REL)/$(TITLE_ID)/pico8 $(REL)/licenses
 	cp -r $(APP_DIR)/. $(REL)/$(TITLE_ID)/
