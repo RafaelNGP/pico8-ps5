@@ -1,5 +1,7 @@
 # PICO-8 for PS5
 
+**[⬇ Download the latest release](https://github.com/RafaelNGP/pico8-ps5/releases/latest)** · [report a problem](https://github.com/RafaelNGP/pico8-ps5/issues/new?template=bug_report.yml)
+
 Runs the **official PICO-8 for Linux** on a jailbroken PS5 as a native app
 with its own icon on the Home screen. It boots straight into Splore and
 works with the DualSense, with sound, and with cart downloads from the BBS.
@@ -22,7 +24,7 @@ No building and no commands: you copy one folder to the PS5.
   (sandbox elevation);
 - a way to copy files to the PS5, such as an FTP server.
 
-**Steps**, with the `pico8-ps5-<version>.zip` package:
+**Steps**, with the `pico8-ps5-<version>.zip` from the [latest release](https://github.com/RafaelNGP/pico8-ps5/releases/latest):
 
 1. copy the `PPSA99808` folder from the zip, as a whole, to `/data/homebrew/`;
 2. from your PICO-8 Linux zip, copy `pico8_dyn` and `pico8.dat` into
