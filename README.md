@@ -24,9 +24,9 @@ No building and no commands: you copy one folder to the PS5.
   (sandbox elevation);
 - a way to copy files to the PS5, such as an FTP server.
 
-**Steps**, with the `pico8-ps5-<version>.zip` from the [latest release](https://github.com/RafaelNGP/pico8-ps5/releases/latest):
+**Steps**, with the `PPSA99808.zip` from the [latest release](https://github.com/RafaelNGP/pico8-ps5/releases/latest):
 
-1. copy the `PPSA99808` folder from the zip, as a whole, to `/data/homebrew/`;
+1. extract the zip and copy the `PPSA99808` folder, as a whole, to `/data/homebrew/`;
 2. from your PICO-8 Linux zip, copy `pico8_dyn` and `pico8.dat` into
    `PPSA99808/pico8/`;
 3. within ~15 s, ShadowMountPlus adds the **PICO-8** icon to the Home screen.
@@ -39,6 +39,7 @@ No building and no commands: you copy one folder to the PS5.
     sce_module/libc.prx          boilerplate runtime
     sce_sys/param.json, icon0.png
     pico8/pico8_dyn, pico8.dat   your PICO-8 files
+    README.txt, LICENSE, licenses/
 /data/pico8/                     created by the app
     .lexaloffle/pico-8/          config, favourites, downloaded carts and saves
     loader.log                   log of the last run
@@ -46,8 +47,10 @@ No building and no commands: you copy one folder to the PS5.
 
 If a file is missing, or if `pico8_dyn` is a different version, the app
 shows a notification. To update, close the app and copy the new
-`PPSA99808` folder over the old one. Saves live in `/data/pico8`, outside
-the app folder, so they are kept.
+`PPSA99808` folder over the old one. If the Home screen keeps the old icon,
+delete the PICO-8 icon from the Home screen (only the icon, not the folder):
+ShadowMountPlus adds it again within ~15 s. Saves live in `/data/pico8`,
+outside the app folder, so they are kept.
 
 ## Known limitations
 
@@ -83,7 +86,7 @@ make               # builds the app into pico8_app/build/PPSA99808
 make install-app   # builds the app and uploads it to /data/homebrew/PPSA99808
 make upload-data   # once: uploads pico8_dyn and pico8.dat to PPSA99808/pico8/
 make log           # prints /data/pico8/loader.log
-make release       # builds release/pico8-ps5-<version>.zip
+make release       # builds release/<version>/PPSA99808.zip
 ```
 
 The first build downloads and compiles the PS5 port of SDL2, libcurl,
@@ -91,8 +94,11 @@ mbedTLS and the native app boilerplate, which takes a few minutes.
 `install-app` needs the app to be closed on the PS5, because FTP refuses to
 overwrite an `eboot.bin` that is in use.
 
-The `make release` zip contains the `PPSA99808` folder, a `README.txt` and
-the license notices.
+The `make release` zip has the `PPSA99808` folder at its root, as the
+[PS5 homebrew catalog](https://github.com/blackbearreloaded/ps5-homebrew-catalog/blob/main/docs/artifact-formats.md)
+expects, with a `README.txt` and the license notices inside it. Raise
+`contentVersion` in `pico8_app/sce_sys/param.json` for every release: consoles
+use it to detect updates.
 
 ## Layout
 
