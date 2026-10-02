@@ -22,7 +22,7 @@ Requirements on the PS5
 
 Installation
 ------------
-1. Copy the @TITLE_ID@ folder from this package, as a whole, to
+1. Copy the @TITLE_ID@ folder (the one holding this file), as a whole, to
    /data/homebrew/ on the PS5.
 
 2. From your PICO-8 Linux zip, copy these two files into
@@ -43,6 +43,7 @@ When you're done, the folder on the PS5 looks like this:
        sce_sys/param.json, icon0.png
        pico8/pico8_dyn          <- yours
        pico8/pico8.dat          <- yours
+       README.txt, LICENSE, licenses/
 
 If a file is missing, the app shows a notification saying which one.
 
@@ -52,6 +53,10 @@ Updating
 Close the app on the PS5 and copy the @TITLE_ID@ folder of the new version
 over the old one. Don't delete the pico8/ subfolder: that's where your
 files are.
+
+If the Home screen keeps showing the old icon, delete the PICO-8 icon from
+the Home screen (only the icon, not the folder on /data/homebrew/).
+ShadowMountPlus adds it again within ~15 s; your saves are kept.
 
 
 Where your data lives
@@ -77,3 +82,5 @@ PICO-8 for PS5 is free software under the GNU General Public License,
 version 3 or later (see LICENSE). Source code: @SOURCE@ (commit @COMMIT@).
 The license notices of the bundled components are in licenses/.
 PICO-8 itself is not part of this package and is (c) Lexaloffle Games.
+The app icon is the PICO-8 logo, (c) Lexaloffle Games; it is not covered
+by the GPL.

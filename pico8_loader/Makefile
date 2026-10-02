@@ -56,23 +56,24 @@ app: $(SDL2)/lib/libSDL2.a $(CURL)/lib/libcurl.a
 	cmp -s $(APP)/src/app_imports.c $(APP)/build/app_imports.prev || \
 	    ../deps/build_app.sh pico8_app
 
-# Pacote para quem nao vai compilar. A pasta <TITLE_ID>/ vai inteira para
-# /data/homebrew/: o app (icone generico, sem nada da Lexaloffle), o
-# cacert.pem e a subpasta pico8/ onde o usuario poe o pico8_dyn e o pico8.dat.
+# Pacote para quem nao vai compilar: release/<versao>/<TITLE_ID>.zip, com a
+# pasta <TITLE_ID>/ na raiz (formato do ps5-homebrew-catalog). Ela vai inteira
+# para /data/homebrew/: o app, o cacert.pem, os textos de licenca e a subpasta
+# pico8/ onde o usuario poe o pico8_dyn e o pico8.dat.
 VERSION    := $(shell git describe --tags --always --dirty)
 COMMIT     := $(shell git rev-parse --short HEAD)
 SOURCE_URL ?= $(or $(shell git remote get-url origin 2>/dev/null | sed 's/\.git$$//'),(no public repository yet))
-REL_NAME   := pico8-ps5-$(VERSION)
-REL        := ../release/$(REL_NAME)
+REL_DIR    := ../release/$(VERSION)
+REL        := $(REL_DIR)/$(TITLE_ID)
 
 release: ../deps/cacert.pem
-	APP_ICON_LOGO= $(MAKE) app
-	rm -rf $(REL) $(REL).zip
-	mkdir -p $(REL)/$(TITLE_ID)/pico8 $(REL)/licenses
-	cp -r $(APP_DIR)/. $(REL)/$(TITLE_ID)/
-	rm -rf $(REL)/$(TITLE_ID)/assets
-	cp ../deps/cacert.pem $(REL)/$(TITLE_ID)/
-	cp $(APP)/release/PUT-YOUR-FILES-HERE.txt $(REL)/$(TITLE_ID)/pico8/
+	$(MAKE) app
+	rm -rf $(REL_DIR)
+	mkdir -p $(REL)/pico8 $(REL)/licenses
+	cp -r $(APP_DIR)/. $(REL)/
+	rm -rf $(REL)/assets
+	cp ../deps/cacert.pem $(REL)/
+	cp $(APP)/release/PUT-YOUR-FILES-HERE.txt $(REL)/pico8/
 	sed -e 's|@VERSION@|$(VERSION)|' -e 's|@COMMIT@|$(COMMIT)|' -e 's|@TITLE_ID@|$(TITLE_ID)|g' \
 	    -e 's|@SOURCE@|$(SOURCE_URL)|' $(APP)/release/README.txt > $(REL)/README.txt
 	cp ../LICENSE                                   $(REL)/LICENSE
@@ -85,8 +86,8 @@ release: ../deps/cacert.pem
 	    > $(REL)/licenses/dlmalloc-MIT-0.txt
 	printf 'cacert.pem: Mozilla root certificates (MPL-2.0), from https://curl.se/ca/cacert.pem\n' \
 	    > $(REL)/licenses/cacert.txt
-	cd ../release && zip -qr $(REL_NAME).zip $(REL_NAME)
-	@echo "pacote: release/$(REL_NAME).zip"
+	cd $(REL_DIR) && zip -qr $(TITLE_ID).zip $(TITLE_ID)
+	@echo "pacote: release/$(VERSION)/$(TITLE_ID).zip"
 
 # Alvos que falam com o PS5 precisam do IP.
 need-host:

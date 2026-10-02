@@ -2,7 +2,7 @@
 
 Runs the **official PICO-8 for Linux** (`pico8_dyn`, x86-64) on a
 jailbroken PS5, "bring your own license" style: you provide your own
-`pico8_dyn` and `pico8.dat`, and nothing from Lexaloffle is redistributed.
+`pico8_dyn` and `pico8.dat`, which are not redistributed.
 
 The loader follows the idea of the Android→PS Vita ports (`so_loader`): it
 loads the ELF at its original addresses, resolves its imports with native

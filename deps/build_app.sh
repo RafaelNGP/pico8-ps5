@@ -50,11 +50,7 @@ stage=$app/build
 rm -rf "$stage/src" "$stage/sce_sys" "$stage/assets"
 mkdir -p "$stage/src" "$stage/sce_sys" "$stage/assets"
 cp -rL "$app/src/." "$stage/src/"
-cp "$app/sce_sys/param.json" "$stage/sce_sys/"
-# APP_ICON_LOGO vazio (make release) gera o icone generico: o logo da
-# Lexaloffle so entra no build local, nunca num pacote distribuido.
-python3 "$here/../pico8_app/make_icon.py" "$stage/sce_sys/icon0.png" \
-    "${APP_ICON_LOGO-${PICO8_DIR:-$HOME/pico-8}/lexaloffle-pico8.png}"
+cp "$app/sce_sys/param.json" "$app/sce_sys/icon0.png" "$stage/sce_sys/"
 
 APP_DEFS= APP_INCS= APP_LIBS= SDK_LIBC_OBJS=
 [ ! -f "$app/build.env" ] || . "$app/build.env"
